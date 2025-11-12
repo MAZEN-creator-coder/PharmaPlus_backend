@@ -49,7 +49,7 @@ const register = asyncWrapper(async (req, res, next) => {
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(password, salt);
 
-  const filename = req.file?.filename || "avatar-default.jpeg";
+  const filename = req.file?.filename || "avatar.webp";
 
   const newUser = new Users({
     firstname,
@@ -74,7 +74,7 @@ const register = asyncWrapper(async (req, res, next) => {
   const userToken = jwt.sign(
     { id: newUser._id, email: newUser.email, role: newUser.role, image: newUser.avatar },
     process.env.JWT_SECRET_KEY,
-    { expiresIn: '1h' }
+    { expiresIn: '24h' }
   );
 
   newUser.token = userToken;
@@ -139,6 +139,39 @@ const getUserById = asyncWrapper(async (req, res, next) => {
     return next(error);
   }
   res.json({ status: httpStatus.success, data: { user } });
+});
+
+/* =========================
+   🔹 Get Current User Profile (read-only)
+   Returns only user document without password. This endpoint is read-only — no updates.
+========================= */
+const getProfile = asyncWrapper(async (req, res, next) => {
+  const id = req.currentUser && req.currentUser.id;
+  if (!id) {
+    const error = new Error('Unauthorized');
+    error.statusCode = 401;
+    return next(error);
+  }
+
+  const user = await Users.findById(id, { __v: 0, password: 0 });
+  if (!user) {
+    const error = new Error('User not found');
+    error.statusCode = 404;
+    return next(error);
+  }
+
+  // Return only fields expected by the profile page to emphasize read-only usage
+  const profile = {
+    _id: user._id,
+    firstname: user.firstname,
+    lastname: user.lastname,
+    fullName: user.fullName,
+    email: user.email,
+    phone: user.phone,
+    avatar: user.avatar,
+  };
+
+  res.json({ status: httpStatus.success, data: { user: profile } });
 });
 
 /* =========================
@@ -245,6 +278,7 @@ module.exports = {
   register,
   login,
   getUserById,
+  getProfile,
   updateUser,
   deleteUser,
   addOrder,

@@ -3,7 +3,12 @@ const path=require('path');
 const cors=require('cors');
 const httpstatustext=require('./utilities/httpstatustext');
 
-require('dotenv').config();
+const fs = require('fs');
+// Load .env from backend folder if present, otherwise fall back to parent workspace .env
+const envPathLocal = path.join(__dirname, '.env');
+const envPathRoot = path.join(__dirname, '..', '.env');
+const dotenvPath = fs.existsSync(envPathLocal) ? envPathLocal : envPathRoot;
+require('dotenv').config({ path: dotenvPath });
 const app = express();
 app.use(cors());
 
