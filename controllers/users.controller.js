@@ -82,7 +82,7 @@ const register = asyncWrapper(async (req, res, next) => {
 
   res.status(201).json({
     status: httpStatus.success,
-    data: { token: userToken, user: newUser },
+    data: { token: userToken},
   });
 });
 
@@ -123,7 +123,7 @@ const login = asyncWrapper(async (req, res, next) => {
 
   res.json({
     status: httpStatus.success,
-    data: { token: userToken, user: existingUser },
+    data: { token: userToken },
   });
 });
 
