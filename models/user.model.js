@@ -53,7 +53,7 @@ const userSchema = new mongoose.Schema({
   },
   lastname: {
     type: String,
-    required: true,
+    required: false,
     minlength: 1,
   },
   fullName: {
