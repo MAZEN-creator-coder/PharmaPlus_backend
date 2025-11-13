@@ -54,7 +54,7 @@ const userSchema = new mongoose.Schema({
   lastname: {
     type: String,
     required: false,
-    minlength: 1,
+    minlength: 0,
   },
   fullName: {
     type: String,
