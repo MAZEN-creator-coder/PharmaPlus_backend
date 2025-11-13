@@ -175,6 +175,41 @@ const getProfile = asyncWrapper(async (req, res, next) => {
 });
 
 /* =========================
+   🔹 Update Current Authenticated User (profile)
+   This updates the user identified by the JWT (`req.currentUser.id`) and
+   accepts the same fields as the general updateUser endpoint. It also
+   supports avatar upload via `req.file`.
+========================= */
+const updateProfile = asyncWrapper(async (req, res, next) => {
+  const id = req.currentUser && req.currentUser.id;
+  if (!id) {
+    const error = new Error('Unauthorized');
+    error.statusCode = 401;
+    return next(error);
+  }
+
+  const updateData = { ...req.body };
+
+  if (req.file) {
+    updateData.avatar = `uploads/${req.file.filename}`;
+  }
+
+  if (updateData.firstname || updateData.lastname) {
+    updateData.fullName = `${updateData.firstname || ''} ${updateData.lastname || ''}`.trim();
+  }
+
+  const updatedUser = await Users.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
+  if (!updatedUser) {
+    const error = new Error("User not found");
+    error.statusCode = 404;
+    return next(error);
+  }
+
+  // Return the updated user (controller.updateUser returns full document too)
+  res.json({ status: httpStatus.success, data: { user: updatedUser } });
+});
+
+/* =========================
    🔹 Update User
 ========================= */
 const updateUser = asyncWrapper(async (req, res, next) => {
@@ -279,6 +314,7 @@ module.exports = {
   login,
   getUserById,
   getProfile,
+  updateProfile,
   updateUser,
   deleteUser,
   addOrder,

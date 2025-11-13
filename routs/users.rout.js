@@ -44,9 +44,9 @@ router.post("/register", upload.single("avatar"), controller.register);
 
 router.post("/login", controller.login);
 
-
-// Profile endpoint (read-only) for current authenticated user — placed before dynamic :id route
 router.get('/profile', verifyToken, controller.getProfile);
+
+router.put('/profile', verifyToken, upload.single("avatar"), controller.updateProfile);
 
 router.get("/:id", verifyToken, controller.getUserById);
 
