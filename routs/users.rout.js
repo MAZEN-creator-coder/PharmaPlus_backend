@@ -35,32 +35,15 @@ const router = express.Router();
 /* =====================
         Routes
 ===================== */
-
 router.get("/", verifyToken, controller.getAllUsers);
-
-
 router.post("/register", upload.single("avatar"), controller.register);
-
-
 router.post("/login", controller.login);
-
 router.get('/profile', verifyToken, controller.getProfile);
-
 router.put('/profile', verifyToken, upload.single("avatar"), controller.updateProfile);
-
 router.get("/:id", verifyToken, controller.getUserById);
-
-
 router.put("/:id", verifyToken, upload.single("avatar"), controller.updateUser);
-
-
 router.delete("/:id", verifyToken, controller.deleteUser);
-
-router.post("/:id/orders", verifyToken, controller.addOrder);
-
 router.post("/:id/conversations", verifyToken, controller.addConversation);
-
-
 router.put("/:id/preferences", verifyToken, controller.updatePreferences);
 
 module.exports = router;

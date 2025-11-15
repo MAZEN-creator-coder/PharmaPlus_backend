@@ -1,8 +1,63 @@
 const httpStatus = require('../utilities/httpstatustext');
 const Users = require("../models/user.model");
+const Pharmacy = require("../models/pharmacy.model");
 const asyncWrapper = require("../middleware/asyncwrapper");
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const userRoles = require('../utilities/userRoles');
+const locationService = require('../services/location.service');
+
+/* =========================
+   🔹 Helper Function: Create Pharmacy for Admin
+========================= */
+const createPharmacyForAdmin = async (user) => {
+  try {
+    let pharmacyData = {
+      name: `${user.fullName}'s Pharmacy`,
+      contact: user.phone || '',
+      email: user.email,
+      status: 'inactive',
+      managerId: user._id,
+    };
+
+    if (user.address) {
+      pharmacyData.address = user.address;
+    }
+
+    // 🌍 الأولوية: استخدام Geolocation من User إن توفرت
+    if (user.position && user.position.lat && user.position.lng) {
+      pharmacyData.position = user.position;
+      console.log(`✅ تم استخدام Geolocation من User: lat=${user.position.lat}, lng=${user.position.lng}`);
+    } 
+    // إذا لم يكن هناك Geolocation، حاول حساب الموقع من العنوان
+    else if (user.address) {
+      console.log(`📍 جاري حساب موقع الصيدلية من عنوان المستخدم: ${user.address}`);
+      
+      const position = await locationService.getPositionForAddress(user.address);
+      
+      if (position) {
+        pharmacyData.position = position;
+        console.log(`✅ تم حساب الموقع من العنوان: lat=${position.lat}, lng=${position.lng}`);
+      } else {
+        console.log(`⚠️ لم يتم حساب الموقع من العنوان`);
+      }
+    } else {
+      console.log(`⚠️ لا توجد بيانات موقع (بدون Geolocation وبدون عنوان)`);
+    }
+
+    const pharmacy = await Pharmacy.create(pharmacyData);
+    
+    // ربط المستخدم بالصيدلية
+    user.pharmacyId = pharmacy._id;
+    await user.save();
+    
+    console.log(`✅ تم إنشاء صيدلية للـ Admin: ${user.email}`);
+    return pharmacy;
+  } catch (error) {
+    console.error('Error creating pharmacy for admin:', error);
+    throw error;
+  }
+};
 
 /* =========================
    🔹 Get All Users (Paginated)
@@ -36,6 +91,9 @@ const register = asyncWrapper(async (req, res, next) => {
     phone,
     dob,
     joined,
+    address,      // ✅ العنوان
+    latitude,     // ✅ Geolocation من Frontend
+    longitude,    // ✅ Geolocation من Frontend
   } = req.body;
 
   const existingUser = await Users.findOne({ email });
@@ -57,18 +115,35 @@ const register = asyncWrapper(async (req, res, next) => {
     fullName: `${firstname} ${lastname}`,
     email,
     password: hashedPassword,
-    role,
+    role: role || userRoles.USER,
     phone,
     dob,
     joined: joined || new Date().toISOString().split('T')[0],
     avatar: `uploads/${filename}`,
+    address: address || null,
     preferences: {
       newsletter: true,
       smsAlerts: false,
     },
     conversations: [],
-    orders: [],
   });
+
+  // 🌍 إذا Frontend مرجع latitude و longitude → حطها في position
+  if (latitude && longitude) {
+    newUser.position = {
+      lat: parseFloat(latitude),
+      lng: parseFloat(longitude)
+    };
+    console.log(`✅ تم حفظ Geolocation: lat=${latitude}, lng=${longitude}`);
+  } else {
+    console.log(`⚠️ لم يتم إرسال Geolocation من Frontend`);
+  }
+
+  // إذا كان الدور admin، إنشاء صيدلية له تلقائياً
+  if (newUser.role === userRoles.ADMIN) {
+    // تمرير position من User للصيدلية
+    await createPharmacyForAdmin(newUser);
+  }
 
   // Generate JWT token
   const userToken = jwt.sign(
@@ -82,7 +157,19 @@ const register = asyncWrapper(async (req, res, next) => {
 
   res.status(201).json({
     status: httpStatus.success,
-    data: { token: userToken},
+    data: { 
+      token: userToken,
+      user: {
+        _id: newUser._id,
+        firstname: newUser.firstname,
+        lastname: newUser.lastname,
+        email: newUser.email,
+        role: newUser.role,
+        address: newUser.address,
+        position: newUser.position,  // ✅ إرجاع الموقع
+        pharmacyId: newUser.pharmacyId || null
+      }
+    },
   });
 });
 
@@ -143,7 +230,6 @@ const getUserById = asyncWrapper(async (req, res, next) => {
 
 /* =========================
    🔹 Get Current User Profile (read-only)
-   Returns only user document without password. This endpoint is read-only — no updates.
 ========================= */
 const getProfile = asyncWrapper(async (req, res, next) => {
   const id = req.currentUser && req.currentUser.id;
@@ -160,7 +246,6 @@ const getProfile = asyncWrapper(async (req, res, next) => {
     return next(error);
   }
 
-  // Return only fields expected by the profile page to emphasize read-only usage
   const profile = {
     _id: user._id,
     firstname: user.firstname,
@@ -168,6 +253,8 @@ const getProfile = asyncWrapper(async (req, res, next) => {
     fullName: user.fullName,
     email: user.email,
     phone: user.phone,
+    address: user.address,
+    position: user.position,  // ✅ إضافة الموقع
     avatar: user.avatar,
   };
 
@@ -176,9 +263,6 @@ const getProfile = asyncWrapper(async (req, res, next) => {
 
 /* =========================
    🔹 Update Current Authenticated User (profile)
-   This updates the user identified by the JWT (`req.currentUser.id`) and
-   accepts the same fields as the general updateUser endpoint. It also
-   supports avatar upload via `req.file`.
 ========================= */
 const updateProfile = asyncWrapper(async (req, res, next) => {
   const id = req.currentUser && req.currentUser.id;
@@ -205,12 +289,11 @@ const updateProfile = asyncWrapper(async (req, res, next) => {
     return next(error);
   }
 
-  // Return the updated user (controller.updateUser returns full document too)
   res.json({ status: httpStatus.success, data: { user: updatedUser } });
 });
 
 /* =========================
-   🔹 Update User
+   🔹 Update User (admin)
 ========================= */
 const updateUser = asyncWrapper(async (req, res, next) => {
   const { id } = req.params;
@@ -224,23 +307,6 @@ const updateUser = asyncWrapper(async (req, res, next) => {
     updateData.fullName = `${updateData.firstname || ''} ${updateData.lastname || ''}`.trim();
   }
 
-  const updatedUser = await Users.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
-  if (!updatedUser) {
-    const error = new Error("User not found");
-    error.statusCode = 404;
-    return next(error);
-  }
-
-  res.json({ status: httpStatus.success, data: { user: updatedUser } });
-});
-
-/* =========================
-   🔹 Add Order
-========================= */
-const addOrder = asyncWrapper(async (req, res, next) => {
-  const { id } = req.params;
-  const  order  = req.body;
-
   const user = await Users.findById(id);
   if (!user) {
     const error = new Error("User not found");
@@ -248,10 +314,21 @@ const addOrder = asyncWrapper(async (req, res, next) => {
     return next(error);
   }
 
-  user.orders.push(order);
-  await user.save();
+  // إذا تم تغيير الـ role إلى admin وكان المستخدم ليس لديه صيدلية
+  if (updateData.role === userRoles.ADMIN && user.role !== userRoles.ADMIN) {
+    // تحديث المستخدم أولاً
+    user.set(updateData);
+    // ثم إنشاء الصيدلية
+    await createPharmacyForAdmin(user);
+  } else {
+    // تحديث عادي بدون إنشاء صيدلية
+    Object.assign(user, updateData);
+    await user.save();
+  }
 
-  res.json({ status: httpStatus.success, data: { orders: user.orders } });
+  const updatedUser = await Users.findById(id);
+
+  res.json({ status: httpStatus.success, data: { user: updatedUser } });
 });
 
 /* =========================
@@ -259,7 +336,7 @@ const addOrder = asyncWrapper(async (req, res, next) => {
 ========================= */
 const addConversation = asyncWrapper(async (req, res, next) => {
   const { id } = req.params;
-  const  conversation  = req.body;
+  const conversation = req.body;
 
   const user = await Users.findById(id);
   if (!user) {
@@ -317,7 +394,6 @@ module.exports = {
   updateProfile,
   updateUser,
   deleteUser,
-  addOrder,
   addConversation,
   updatePreferences,
 };

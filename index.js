@@ -2,7 +2,11 @@ const express = require('express');
 const path=require('path');
 const cors=require('cors');
 const httpstatustext=require('./utilities/httpstatustext');
-
+//routers
+const usersRouter = require("./routs/users.rout");
+const orderRoutes = require("./routs/orders.rout");
+const medicineRoutes = require("./routs/medicines.rout");
+const pharmacyRoutes = require("./routs/pharmacies.rout");
 const fs = require('fs');
 // Load .env from backend folder if present, otherwise fall back to parent workspace .env
 const envPathLocal = path.join(__dirname, '.env');
@@ -27,10 +31,11 @@ mongoose.connect(process.env.MONGO_URL)
     console.error('Error connecting to MongoDB:', error.message);
 });
 
-//routers
-const usersRouter = require("./routs/users.rout");
+//middlewares of routers
 app.use("/api/users",usersRouter);
-
+app.use("/api/orders",orderRoutes);
+app.use("/api/medicines",medicineRoutes);
+app.use("/api/pharmacies",pharmacyRoutes);
 
 // handling other routes by jsend
 //and to handle unfound routes
