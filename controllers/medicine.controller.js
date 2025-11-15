@@ -3,27 +3,18 @@ const Pharmacy = require("../models/pharmacy.model");
 const asyncWrapper = require("../middleware/asyncwrapper");
 const httpStatus = require("../utilities/httpstatustext");
 
-/* =========================
-   🔹 Helper Function: Calculate Medicine Status
-========================= */
 const calculateMedicineStatus = (stock, threshold) => {
-  // إذا المخزون = 0 → منقضي
   if (stock === 0) {
     return "outOfStock";
   }
   
-  // إذا المخزون <= الحد الأدنى → مخزون منخفض
   if (stock <= threshold) {
     return "lowStock";
   }
   
-  // إذا المخزون > الحد الأدنى → متاح
   return "Available";
 };
 
-/* =========================
-   🔹 Get All Medicines
-========================= */
 const getAllMedicines = asyncWrapper(async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
@@ -42,9 +33,6 @@ const getAllMedicines = asyncWrapper(async (req, res) => {
 });
 
 
-/* =========================
-   🔹 Get Medicine by ID
-========================= */
 const getMedicineById = asyncWrapper(async (req, res) => {
   const { id } = req.params;
   const medicine = await Medicine.findById(id).populate("pharmacy", "name position");
@@ -56,9 +44,6 @@ const getMedicineById = asyncWrapper(async (req, res) => {
   res.json({ status: httpStatus.success, data: { medicine } });
 });
 
-/* =========================
-   🔹 Create Medicine
-========================= */
 const createMedicine = asyncWrapper(async (req, res) => {
   const medicineData = req.body;
 
@@ -66,7 +51,6 @@ const createMedicine = asyncWrapper(async (req, res) => {
     medicineData.medicineImage = `uploads/${req.file.filename}`;
   }
 
-  // 📊 حساب الـ status تلقائياً بناءً على stock و threshold
   if (medicineData.stock !== undefined && medicineData.threshold !== undefined) {
     medicineData.status = calculateMedicineStatus(medicineData.stock, medicineData.threshold);
     console.log(`✅ تم حساب الحالة: stock=${medicineData.stock}, threshold=${medicineData.threshold}, status=${medicineData.status}`);
@@ -74,12 +58,10 @@ const createMedicine = asyncWrapper(async (req, res) => {
 
   const newMedicine = await Medicine.create(medicineData);
 
-  // 🏥 إضافة الفئة إلى قائمة فئات الصيدلية تلقائياً
   if (medicineData.category && medicineData.pharmacy) {
     const pharmacy = await Pharmacy.findById(medicineData.pharmacy);
     
     if (pharmacy) {
-      // تحقق إذا كانت الفئة موجودة بالفعل
       if (!pharmacy.categorys.includes(medicineData.category)) {
         pharmacy.categorys.push(medicineData.category);
         await pharmacy.save();
@@ -93,9 +75,6 @@ const createMedicine = asyncWrapper(async (req, res) => {
   res.status(201).json({ status: httpStatus.success, data: { medicine: newMedicine } });
 });
 
-/* =========================
-   🔹 Update Medicine
-========================= */
 const updateMedicine = asyncWrapper(async (req, res) => {
   const { id } = req.params;
   const updateData = { ...req.body };
@@ -104,7 +83,6 @@ const updateMedicine = asyncWrapper(async (req, res) => {
     updateData.medicineImage = `uploads/${req.file.filename}`;
   }
 
-  // احصل على الدواء القديم أولاً
   const oldMedicine = await Medicine.findById(id);
   if (!oldMedicine) {
     const error = new Error("Medicine not found");
@@ -112,7 +90,6 @@ const updateMedicine = asyncWrapper(async (req, res) => {
     throw error;
   }
 
-  // 📊 إعادة حساب الـ status إذا تم تعديل stock أو threshold
   if (updateData.stock !== undefined || updateData.threshold !== undefined) {
     const stock = updateData.stock !== undefined ? updateData.stock : oldMedicine.stock;
     const threshold = updateData.threshold !== undefined ? updateData.threshold : oldMedicine.threshold;
@@ -123,12 +100,10 @@ const updateMedicine = asyncWrapper(async (req, res) => {
 
   const updatedMedicine = await Medicine.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
 
-  // 🏥 إذا تم تغيير الفئة، أضفها للصيدلية
   if (updateData.category && updateData.category !== oldMedicine.category) {
     const pharmacy = await Pharmacy.findById(updatedMedicine.pharmacy);
     
     if (pharmacy) {
-      // أضف الفئة الجديدة إذا لم تكن موجودة
       if (!pharmacy.categorys.includes(updateData.category)) {
         pharmacy.categorys.push(updateData.category);
         await pharmacy.save();
@@ -140,9 +115,6 @@ const updateMedicine = asyncWrapper(async (req, res) => {
   res.json({ status: httpStatus.success, data: { medicine: updatedMedicine } });
 });
 
-/* =========================
-   🔹 Delete Medicine
-========================= */
 const deleteMedicine = asyncWrapper(async (req, res) => {
   const { id } = req.params;
   const medicine = await Medicine.findByIdAndDelete(id);
@@ -154,21 +126,14 @@ const deleteMedicine = asyncWrapper(async (req, res) => {
   res.json({ status: httpStatus.success, message: "Medicine deleted successfully" });
 });
 
-/* =========================
-   🔹 Get Low Stock Medicines
-========================= */
 const getLowStockMedicines = asyncWrapper(async (req, res) => {
   const lowStockMedicines = await Medicine.find({ $expr: { $lte: ["$stock", "$threshold"] } });
   res.json({ status: httpStatus.success, data: { medicines: lowStockMedicines } });
 });
 
-/* =========================
-   🔹 Get Low Stock Medicines for Specific Pharmacy
-========================= */
 const getLowStockMedicinesByPharmacy = asyncWrapper(async (req, res) => {
   const { pharmacyId } = req.params;
   
-  // تحقق من وجود الصيدلية
   const pharmacy = await Pharmacy.findById(pharmacyId);
   if (!pharmacy) {
     const error = new Error("Pharmacy not found");
@@ -176,10 +141,9 @@ const getLowStockMedicinesByPharmacy = asyncWrapper(async (req, res) => {
     throw error;
   }
 
-  // احصل على الأدوية منخفضة المخزون للصيدلية المعينة
   const lowStockMedicines = await Medicine.find({
     pharmacy: pharmacyId,
-    $expr: { $lte: ["$stock", "$threshold"] }  // stock <= threshold
+    $expr: { $lte: ["$stock", "$threshold"] }
   });
 
   res.json({ 
@@ -192,21 +156,15 @@ const getLowStockMedicinesByPharmacy = asyncWrapper(async (req, res) => {
   });
 });
 
-/* =========================
-   🔹 Get Medicines by Pharmacy ID
-========================= */
 const getMedicinesByPharmacy = asyncWrapper(async (req, res) => {
   const { pharmacyId } = req.params;
-  const medicines = await Medicine.find({ pharmacyId });
+  const medicines = await Medicine.find({ pharmacy: pharmacyId });
   res.json({ status: httpStatus.success, data: { medicines } });
 });
 
-/* =========================
-   🔹 Get Medicines by Name + Nearby
-========================= */
 const getMedicinesByName = asyncWrapper(async (req, res) => {
   const { name } = req.query;
-  const { lat, lng } = req.query; // موقع المستخدم
+  const { lat, lng } = req.query;
 
   if (!lat || !lng) {
     const error = new Error("User location (lat, lng) is required");
@@ -217,7 +175,7 @@ const getMedicinesByName = asyncWrapper(async (req, res) => {
   const regex = new RegExp(name, "i");
   const medicines = await Medicine.find({ name: regex }).populate("pharmacy", "name position");
 
-  const maxDistanceKm = 100000; // أقصى مسافة
+  const maxDistanceKm = 100000;
   const medicinesNearby = medicines
     .map((med) => {
       if (!med.pharmacy?.position) return null;
@@ -242,11 +200,8 @@ const getMedicinesByName = asyncWrapper(async (req, res) => {
   });
 });
 
-/* =========================
-   🔹 حساب المسافة بين نقطتين بالـ KM
-========================= */
 function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
-  const R = 6371; // نصف قطر الأرض بالكيلومتر
+  const R = 6371;
   const dLat = deg2rad(lat2 - lat1);
   const dLon = deg2rad(lon2 - lon1);
   const a =
@@ -267,7 +222,7 @@ module.exports = {
   updateMedicine,
   deleteMedicine,
   getLowStockMedicines,
-  getLowStockMedicinesByPharmacy,  // ✨ جديد!
+  getLowStockMedicinesByPharmacy,
   getMedicinesByPharmacy,
   getMedicinesByName,
 };

@@ -7,9 +7,6 @@ const jwt = require('jsonwebtoken');
 const userRoles = require('../utilities/userRoles');
 const locationService = require('../services/location.service');
 
-/* =========================
-   🔹 Helper Function: Create Pharmacy for Admin
-========================= */
 const createPharmacyForAdmin = async (user) => {
   try {
     let pharmacyData = {
@@ -24,12 +21,10 @@ const createPharmacyForAdmin = async (user) => {
       pharmacyData.address = user.address;
     }
 
-    // 🌍 الأولوية: استخدام Geolocation من User إن توفرت
     if (user.position && user.position.lat && user.position.lng) {
       pharmacyData.position = user.position;
       console.log(`✅ تم استخدام Geolocation من User: lat=${user.position.lat}, lng=${user.position.lng}`);
     } 
-    // إذا لم يكن هناك Geolocation، حاول حساب الموقع من العنوان
     else if (user.address) {
       console.log(`📍 جاري حساب موقع الصيدلية من عنوان المستخدم: ${user.address}`);
       
@@ -47,7 +42,6 @@ const createPharmacyForAdmin = async (user) => {
 
     const pharmacy = await Pharmacy.create(pharmacyData);
     
-    // ربط المستخدم بالصيدلية
     user.pharmacyId = pharmacy._id;
     await user.save();
     
@@ -59,9 +53,6 @@ const createPharmacyForAdmin = async (user) => {
   }
 };
 
-/* =========================
-   🔹 Get All Users (Paginated)
-========================= */
 const getAllUsers = asyncWrapper(async (req, res) => {
   const query = req.query;
   const limit = parseInt(query.limit) || 10;
@@ -78,9 +69,6 @@ const getAllUsers = asyncWrapper(async (req, res) => {
   });
 });
 
-/* =========================
-   🔹 Register
-========================= */
 const register = asyncWrapper(async (req, res, next) => {
   const {
     firstname,
@@ -91,9 +79,9 @@ const register = asyncWrapper(async (req, res, next) => {
     phone,
     dob,
     joined,
-    address,      // ✅ العنوان
-    latitude,     // ✅ Geolocation من Frontend
-    longitude,    // ✅ Geolocation من Frontend
+    address,
+    latitude,
+    longitude,
   } = req.body;
 
   const existingUser = await Users.findOne({ email });
@@ -128,7 +116,6 @@ const register = asyncWrapper(async (req, res, next) => {
     conversations: [],
   });
 
-  // 🌍 إذا Frontend مرجع latitude و longitude → حطها في position
   if (latitude && longitude) {
     newUser.position = {
       lat: parseFloat(latitude),
@@ -139,9 +126,7 @@ const register = asyncWrapper(async (req, res, next) => {
     console.log(`⚠️ لم يتم إرسال Geolocation من Frontend`);
   }
 
-  // إذا كان الدور admin، إنشاء صيدلية له تلقائياً
   if (newUser.role === userRoles.ADMIN) {
-    // تمرير position من User للصيدلية
     await createPharmacyForAdmin(newUser);
   }
 
@@ -166,16 +151,13 @@ const register = asyncWrapper(async (req, res, next) => {
         email: newUser.email,
         role: newUser.role,
         address: newUser.address,
-        position: newUser.position,  // ✅ إرجاع الموقع
+        position: newUser.position,
         pharmacyId: newUser.pharmacyId || null
       }
     },
   });
 });
 
-/* =========================
-   🔹 Login
-========================= */
 const login = asyncWrapper(async (req, res, next) => {
   const { email, password } = req.body;
 
@@ -214,9 +196,6 @@ const login = asyncWrapper(async (req, res, next) => {
   });
 });
 
-/* =========================
-   🔹 Get User by ID
-========================= */
 const getUserById = asyncWrapper(async (req, res, next) => {
   const { id } = req.params;
   const user = await Users.findById(id, { __v: 0, password: 0 });
@@ -228,9 +207,6 @@ const getUserById = asyncWrapper(async (req, res, next) => {
   res.json({ status: httpStatus.success, data: { user } });
 });
 
-/* =========================
-   🔹 Get Current User Profile (read-only)
-========================= */
 const getProfile = asyncWrapper(async (req, res, next) => {
   const id = req.currentUser && req.currentUser.id;
   if (!id) {
@@ -254,16 +230,13 @@ const getProfile = asyncWrapper(async (req, res, next) => {
     email: user.email,
     phone: user.phone,
     address: user.address,
-    position: user.position,  // ✅ إضافة الموقع
+    position: user.position,
     avatar: user.avatar,
   };
 
   res.json({ status: httpStatus.success, data: { user: profile } });
 });
 
-/* =========================
-   🔹 Update Current Authenticated User (profile)
-========================= */
 const updateProfile = asyncWrapper(async (req, res, next) => {
   const id = req.currentUser && req.currentUser.id;
   if (!id) {
@@ -292,9 +265,6 @@ const updateProfile = asyncWrapper(async (req, res, next) => {
   res.json({ status: httpStatus.success, data: { user: updatedUser } });
 });
 
-/* =========================
-   🔹 Update User (admin)
-========================= */
 const updateUser = asyncWrapper(async (req, res, next) => {
   const { id } = req.params;
   const updateData = { ...req.body };
@@ -331,9 +301,6 @@ const updateUser = asyncWrapper(async (req, res, next) => {
   res.json({ status: httpStatus.success, data: { user: updatedUser } });
 });
 
-/* =========================
-   🔹 Add Conversation
-========================= */
 const addConversation = asyncWrapper(async (req, res, next) => {
   const { id } = req.params;
   const conversation = req.body;
@@ -351,9 +318,6 @@ const addConversation = asyncWrapper(async (req, res, next) => {
   res.json({ status: httpStatus.success, data: { conversations: user.conversations } });
 });
 
-/* =========================
-   🔹 Update Preferences
-========================= */
 const updatePreferences = asyncWrapper(async (req, res, next) => {
   const { id } = req.params;
   const { preferences } = req.body;
@@ -371,9 +335,6 @@ const updatePreferences = asyncWrapper(async (req, res, next) => {
   res.json({ status: httpStatus.success, data: { preferences: user.preferences } });
 });
 
-/* =========================
-   🔹 Delete User
-========================= */
 const deleteUser = asyncWrapper(async (req, res, next) => {
   const { id } = req.params;
   const user = await Users.findByIdAndDelete(id);

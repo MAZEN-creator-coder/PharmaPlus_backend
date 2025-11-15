@@ -5,7 +5,6 @@ const verifyToken = require("../middleware/verifytoken");
 
 const multer = require("multer");
 
-// ------- Upload Config -------
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, "uploads/"),
   filename: (req, file, cb) => {
@@ -15,7 +14,6 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// ------- Routes -------
 router.post("/", verifyToken, upload.single("img"), controller.addPharmacy);
 router.get("/", verifyToken, controller.getAllPharmacies);
 router.get("/:id", verifyToken, controller.getPharmacyById);
@@ -24,7 +22,6 @@ router.delete("/:id", verifyToken, controller.deletePharmacy);
 
 router.get("/:id/medicines", verifyToken, controller.getMedicinesByPharmacyId);
 router.get("/:id/dashboard", verifyToken, controller.getPharmacyDashboard);
-
 
 router.get("/:id/top-medicines", verifyToken, controller.getTopMedicines);
 router.get("/:id/sales-by-category", verifyToken, controller.getSalesByCategory);

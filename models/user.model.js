@@ -44,7 +44,6 @@ const userSchema = new mongoose.Schema({
   // 📍 العنوان (مطلوب - يُستخدم عند إنشاء صيدلية للـ admin)
   address: {
     type: String,
-    required: true
   },
 
   // 🌍 الموقع الجغرافي (من Geolocation - الفرونت هو اللى يحطه)

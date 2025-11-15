@@ -3,7 +3,6 @@ const controller = require("../controllers/users.controller");
 const verifyToken = require("../middleware/verifytoken");
 const multer = require("multer");
 
-// إعداد التخزين
 const deskstorage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, "uploads/");
@@ -14,7 +13,6 @@ const deskstorage = multer.diskStorage({
   },
 });
 
-// فلترة الملفات (يسمح فقط بالصور)
 const fileFilter = (req, file, cb) => {
   if (file.mimetype.startsWith("image/")) {
     cb(null, true);
@@ -32,9 +30,6 @@ const upload = multer({
 
 const router = express.Router();
 
-/* =====================
-        Routes
-===================== */
 router.get("/", verifyToken, controller.getAllUsers);
 router.post("/register", upload.single("avatar"), controller.register);
 router.post("/login", controller.login);

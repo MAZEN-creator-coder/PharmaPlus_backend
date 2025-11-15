@@ -4,9 +4,7 @@ const httpStatus = require("../utilities/httpstatustext");
 const asyncWrapper = require("../middleware/asyncwrapper");
 const analytics = require("../services/pharmacyAnalytics.service");
 const locationService = require("../services/location.service");
-// =========================
-// Add Pharmacy
-// =========================
+
 const addPharmacy = asyncWrapper(async (req, res) => {
   const img = req.file ? `uploads/${req.file.filename}` : undefined;
   
@@ -15,7 +13,6 @@ const addPharmacy = asyncWrapper(async (req, res) => {
     img
   };
 
-  // حساب الموقع من العنوان إذا لم يكن محدد وكان العنوان موجود
   if (pharmacyData.address && (!pharmacyData.position || !pharmacyData.position.lat)) {
     console.log(`📍 جاري حساب موقع الصيدلية من العنوان: ${pharmacyData.address}`);
     
@@ -29,7 +26,6 @@ const addPharmacy = asyncWrapper(async (req, res) => {
     }
   }
 
-  // تحقق من status - إذا لم يكن موجود، سيكون الافتراضي "inactive"
   if (!pharmacyData.status) {
     pharmacyData.status = "inactive";
   }
@@ -42,9 +38,6 @@ const addPharmacy = asyncWrapper(async (req, res) => {
   });
 });
 
-// =========================
-// Get All Pharmacies with Pagination
-// =========================
 const getAllPharmacies = asyncWrapper(async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   const page = parseInt(req.query.page) || 1;
@@ -60,9 +53,6 @@ const getAllPharmacies = asyncWrapper(async (req, res) => {
   });
 });
 
-// =========================
-// Get Pharmacy By ID
-// =========================
 const getPharmacyById = asyncWrapper(async (req, res) => {
   const pharmacy = await Pharmacy.findById(req.params.id);
 
@@ -79,9 +69,6 @@ const getPharmacyById = asyncWrapper(async (req, res) => {
   });
 });
 
-// =========================
-// Update Pharmacy
-// =========================
 const updatePharmacy = asyncWrapper(async (req, res) => {
   const update = { ...req.body };
 
@@ -89,7 +76,6 @@ const updatePharmacy = asyncWrapper(async (req, res) => {
     update.img = `uploads/${req.file.filename}`;
   }
 
-  // إذا تم تحديث العنوان وليس الموقع، احسب الموقع الجديد
   if (update.address && (!update.position || !update.position.lat)) {
     console.log(`📍 جاري حساب موقع جديد من العنوان المحدث: ${update.address}`);
     
@@ -121,9 +107,6 @@ const updatePharmacy = asyncWrapper(async (req, res) => {
   });
 });
 
-// =========================
-// Delete Pharmacy
-// =========================
 const deletePharmacy = asyncWrapper(async (req, res) => {
   const pharmacy = await Pharmacy.findByIdAndDelete(req.params.id);
 
@@ -140,9 +123,6 @@ const deletePharmacy = asyncWrapper(async (req, res) => {
   });
 });
 
-// =========================
-// Get Medicines By Pharmacy ID
-// =========================
 const getMedicinesByPharmacyId = asyncWrapper(async (req, res) => {
   const medicines = await Medicine.find({ pharmacyId: req.params.id });
 
@@ -152,9 +132,6 @@ const getMedicinesByPharmacyId = asyncWrapper(async (req, res) => {
   });
 });
 
-// ======================================
-// Get Pharmacy Dashboard (Auto Calculate)
-// ======================================
 const getPharmacyDashboard = asyncWrapper(async (req, res) => {
   const pharmacyId = req.params.id;
 
@@ -173,9 +150,6 @@ const getPharmacyDashboard = asyncWrapper(async (req, res) => {
   });
 });
 
-// =========================
-// Get Top Medicines
-// =========================
 const getTopMedicines = asyncWrapper(async (req, res) => {
   const pharmacyId = req.params.id;
 
@@ -197,9 +171,6 @@ const getTopMedicines = asyncWrapper(async (req, res) => {
   res.json({ status: httpStatus.success, pharmacyId, topMedicines });
 });
 
-// =========================
-// Sales By Category
-// =========================
 const getSalesByCategory = asyncWrapper(async (req, res) => {
   const pharmacyId = req.params.id;
 
@@ -216,23 +187,17 @@ const getSalesByCategory = asyncWrapper(async (req, res) => {
   res.json({ status: httpStatus.success, pharmacyId, salesByCategory: categoryMap });
 });
 
-// =========================
-// Low Stock Alerts
-// =========================
 const getLowStockAlerts = asyncWrapper(async (req, res) => {
   const pharmacyId = req.params.id;
 
   const lowStock = await Medicine.find({
     pharmacyId,
-    stock: { $lte: 10 } // يمكنك تغيير threshold حسب الحاجة
+    stock: { $lte: 10 }
   });
 
   res.json({ status: httpStatus.success, pharmacyId, lowStock });
 });
 
-// =========================
-// Customer Analytics
-// =========================
 const getCustomerAnalytics = asyncWrapper(async (req, res) => {
   const pharmacyId = req.params.id;
 

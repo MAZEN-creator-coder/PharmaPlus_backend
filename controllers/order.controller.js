@@ -2,9 +2,7 @@ const Order = require("../models/order.model");
 const asyncWrapper = require("../middleware/asyncwrapper");
 const httpStatus = require("../utilities/httpstatustext");
 
-/* =========================
-   🔹 Create Order
-========================= */
+
 const createOrder = asyncWrapper(async (req, res) => {
   const orderData = req.body;
 
@@ -16,13 +14,9 @@ const createOrder = asyncWrapper(async (req, res) => {
   });
 });
 
-/* =========================
-   🔹 Get All Orders (Admin)
-   ترجع كل بيانات الـ Order + اسم وposition للصيدلية
-========================= */
 const getOrders = asyncWrapper(async (req, res) => {
   const orders = await Order.find()
-    .populate("pharmacyId", "name position"); // فقط الاسم والموقع للصيدلية
+    .populate("pharmacyId", "name position"); 
 
   res.json({
     status: httpStatus.success,
@@ -30,9 +24,7 @@ const getOrders = asyncWrapper(async (req, res) => {
   });
 });
 
-/* =========================
-   🔹 Get Order by ID
-========================= */
+
 const getOrderById = asyncWrapper(async (req, res) => {
   const { id } = req.params;
 
@@ -48,9 +40,7 @@ const getOrderById = asyncWrapper(async (req, res) => {
   res.json({ status: httpStatus.success, data: { order } });
 });
 
-/* =========================
-   🔹 Get Orders by User
-========================= */
+
 const getOrdersByUser = asyncWrapper(async (req, res) => {
   const { userId } = req.params;
 
@@ -60,9 +50,7 @@ const getOrdersByUser = asyncWrapper(async (req, res) => {
   res.json({ status: httpStatus.success, data: { orders } });
 });
 
-/* =========================
-   🔹 Get Orders by Pharmacy
-========================= */
+
 const getOrdersByPharmacy = asyncWrapper(async (req, res) => {
   const { pharmacyId } = req.params;
 
@@ -71,9 +59,7 @@ const getOrdersByPharmacy = asyncWrapper(async (req, res) => {
   res.json({ status: httpStatus.success, data: { orders } });
 });
 
-/* =========================
-   🔹 Update Order Status
-========================= */
+
 const updateOrderStatus = asyncWrapper(async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
@@ -93,9 +79,7 @@ const updateOrderStatus = asyncWrapper(async (req, res) => {
   res.json({ status: httpStatus.success, data: { order } });
 });
 
-/* =========================
-   🔹 Delete Order
-========================= */
+
 const deleteOrder = asyncWrapper(async (req, res) => {
   const { id } = req.params;
 
