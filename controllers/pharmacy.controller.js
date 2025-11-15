@@ -1,5 +1,6 @@
 const Pharmacy = require("../models/pharmacy.model");
 const Medicine = require("../models/medicine.model");
+const Order = require("../models/order.model");
 const httpStatus = require("../utilities/httpstatustext");
 const asyncWrapper = require("../middleware/asyncwrapper");
 const analytics = require("../services/pharmacyAnalytics.service");
@@ -201,22 +202,42 @@ const getLowStockAlerts = asyncWrapper(async (req, res) => {
 const getCustomerAnalytics = asyncWrapper(async (req, res) => {
   const pharmacyId = req.params.id;
 
+  const pharmacy = await Pharmacy.findById(pharmacyId);
+  if (!pharmacy) {
+    const error = new Error("Pharmacy not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const stats = await analytics.calculatePharmacyStats(pharmacyId);
+
   const orders = await Order.find({ pharmacyId });
 
   const customerMap = {};
   orders.forEach(order => {
     const userId = order.userId.toString();
     if (!customerMap[userId]) customerMap[userId] = 0;
-    customerMap[userId] += order.totalPrice || 0;
+    customerMap[userId] += parseFloat(order.total) || 0;
   });
 
-  const totalCustomers = Object.keys(customerMap).length;
   const topCustomers = Object.entries(customerMap)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10)
     .map(([userId, totalSpent]) => ({ userId, totalSpent }));
 
-  res.json({ status: httpStatus.success, pharmacyId, totalCustomers, topCustomers });
+  res.json({ 
+    status: httpStatus.success, 
+    data: {
+      pharmacyId,
+      pharmacy: pharmacy.name,
+      totalOrders: stats.totalOrders,
+      totalSales: stats.totalSales,
+      noOfCustomers: stats.noOfCustomers,
+      productsInStock: stats.productsInStock,
+      last7MonthsSales: stats.last7MonthsSales,
+      topCustomers
+    }
+  });
 });
 
 module.exports = {

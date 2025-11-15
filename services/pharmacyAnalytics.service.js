@@ -19,7 +19,7 @@ exports.calculatePharmacyStats = async (pharmacyId) => {
   // ---------------------------
   // Total Sales (sum of totals)
   // ---------------------------
-  const totalSales = orders.reduce((sum, o) => sum + (o.totalPrice || 0), 0);
+  const totalSales = orders.reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
 
   // ---------------------------
   // Products in Stock (sum stock)
@@ -40,7 +40,7 @@ exports.calculatePharmacyStats = async (pharmacyId) => {
 
     const salesOfMonth = orders
       .filter(o => o.createdAt.toISOString().startsWith(month))
-      .reduce((sum, o) => sum + (o.totalPrice || 0), 0);
+      .reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
 
     return { month, sales: salesOfMonth };
   });
