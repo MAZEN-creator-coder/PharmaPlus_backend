@@ -141,7 +141,7 @@ const register = asyncWrapper(async (req, res, next) => {
 
   // Generate JWT token
   const userToken = jwt.sign(
-    { id: newUser._id, email: newUser.email, role: newUser.role, image: newUser.avatar },
+    { id: newUser._id, email: newUser.email, role: newUser.role, image: newUser.avatar, pharmacyId: newUser.pharmacyId || null },
     process.env.JWT_SECRET_KEY,
     { expiresIn: '24h' }
   );
@@ -192,7 +192,7 @@ const login = asyncWrapper(async (req, res, next) => {
   }
 
   const userToken = jwt.sign(
-    { id: existingUser._id, email: existingUser.email, role: existingUser.role, image: existingUser.avatar },
+    { id: existingUser._id, email: existingUser.email, role: existingUser.role, image: existingUser.avatar, pharmacyId: existingUser.pharmacyId || null },
     process.env.JWT_SECRET_KEY,
     { expiresIn: '1h' }
   );
@@ -298,8 +298,8 @@ const updateUser = asyncWrapper(async (req, res, next) => {
   }
 
   if (updateData.role === userRoles.ADMIN && user.role !== userRoles.ADMIN) {
-    if (!updateData.license) {
-      const error = new Error("License is required for admin users");
+    if (!user.license) {
+      const error = new Error("User must have a license to become an admin");
       error.statusCode = 400;
       return next(error);
     }

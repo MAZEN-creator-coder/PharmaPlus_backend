@@ -108,12 +108,22 @@ const createOrder = asyncWrapper(async (req, res) => {
 });
 
 const getOrders = asyncWrapper(async (req, res) => {
+  const limit = parseInt(req.query.limit) || 10;
+  const page = parseInt(req.query.page) || 1;
+  const skip = (page - 1) * limit;
+
+  const total = await Order.countDocuments();
   const orders = await Order.find()
-    .populate("pharmacyId", "name position"); 
+    .populate("pharmacyId", "name position")
+    .skip(skip)
+    .limit(limit)
+    .sort({ createdAt: -1 });
 
   res.json({
     status: httpStatus.success,
-    data: { orders },
+    data: { 
+      orders
+    }
   });
 });
 
@@ -136,20 +146,41 @@ const getOrderById = asyncWrapper(async (req, res) => {
 
 const getOrdersByUser = asyncWrapper(async (req, res) => {
   const { userId } = req.params;
+  const limit = parseInt(req.query.limit) || 10;
+  const page = parseInt(req.query.page) || 1;
+  const skip = (page - 1) * limit;
 
+  const total = await Order.countDocuments({ userId });
   const orders = await Order.find({ userId })
-    .populate("pharmacyId", "name position");
+    .populate("pharmacyId", "name position")
+    .skip(skip)
+    .limit(limit)
+    .sort({ createdAt: -1 });
 
-  res.json({ status: httpStatus.success, data: { orders } });
+  res.json({ 
+    status: httpStatus.success, 
+    data: { orders }
+  });
 });
 
 
 const getOrdersByPharmacy = asyncWrapper(async (req, res) => {
   const { pharmacyId } = req.params;
+  const limit = parseInt(req.query.limit) || 10;
+  const page = parseInt(req.query.page) || 1;
+  const skip = (page - 1) * limit;
 
-  const orders = await Order.find({ pharmacyId });
+  const total = await Order.countDocuments({ pharmacyId });
+  const orders = await Order.find({ pharmacyId })
+    .skip(skip)
+    .limit(limit)
+    .sort({ updatedAt: -1 });
 
-  res.json({ status: httpStatus.success, data: { orders } });
+  res.json({ 
+    status: httpStatus.success, 
+    data: { orders },
+   
+  });
 });
 
 
