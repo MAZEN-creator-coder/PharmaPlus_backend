@@ -8,7 +8,7 @@ exports.calculatePharmacyStats = async (pharmacyId) => {
 
   const [orders, medicines] = await Promise.all([
     Order.find({ pharmacyId }),
-    Medicine.find({ pharmacyId })
+    Medicine.find({ pharmacy: pharmacyId })
   ]);
 
   // ---------------------------

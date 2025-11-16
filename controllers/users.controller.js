@@ -13,6 +13,7 @@ const createPharmacyForAdmin = async (user) => {
       name: `${user.fullName}'s Pharmacy`,
       contact: user.phone || '',
       email: user.email,
+      license: user.license,
       status: 'inactive',
       managerId: user._id,
     };
@@ -45,7 +46,7 @@ const createPharmacyForAdmin = async (user) => {
     user.pharmacyId = pharmacy._id;
     await user.save();
     
-    console.log(`✅ تم إنشاء صيدلية للـ Admin: ${user.email}`);
+    console.log(`✅ تم إنشاء صيدلية للـ Admin: ${user.email} مع الترخيص: ${user.license}`);
     return pharmacy;
   } catch (error) {
     console.error('Error creating pharmacy for admin:', error);
@@ -82,11 +83,18 @@ const register = asyncWrapper(async (req, res, next) => {
     address,
     latitude,
     longitude,
+    license,
   } = req.body;
 
   const existingUser = await Users.findOne({ email });
   if (existingUser) {
     const error = new Error("Email already registered");
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  if (role === userRoles.ADMIN && !license) {
+    const error = new Error("License is required for admin registration");
     error.statusCode = 400;
     return next(error);
   }
@@ -109,6 +117,7 @@ const register = asyncWrapper(async (req, res, next) => {
     joined: joined || new Date().toISOString().split('T')[0],
     avatar: `uploads/${filename}`,
     address: address || null,
+    license: role === userRoles.ADMIN ? license : null,
     preferences: {
       newsletter: true,
       smsAlerts: false,
@@ -152,6 +161,7 @@ const register = asyncWrapper(async (req, res, next) => {
         role: newUser.role,
         address: newUser.address,
         position: newUser.position,
+        license: newUser.license || null,
         pharmacyId: newUser.pharmacyId || null
       }
     },
@@ -232,6 +242,9 @@ const getProfile = asyncWrapper(async (req, res, next) => {
     address: user.address,
     position: user.position,
     avatar: user.avatar,
+    role: user.role,
+    license: user.license || null,
+    pharmacyId: user.pharmacyId || null,
   };
 
   res.json({ status: httpStatus.success, data: { user: profile } });
@@ -286,17 +299,36 @@ const updateUser = asyncWrapper(async (req, res, next) => {
 
   // إذا تم تغيير الـ role إلى admin وكان المستخدم ليس لديه صيدلية
   if (updateData.role === userRoles.ADMIN && user.role !== userRoles.ADMIN) {
+    // تحقق من وجود license
+    if (!updateData.license) {
+      const error = new Error("License is required for admin users");
+      error.statusCode = 400;
+      return next(error);
+    }
     // تحديث المستخدم أولاً
     user.set(updateData);
     // ثم إنشاء الصيدلية
     await createPharmacyForAdmin(user);
+  } else if (updateData.role === userRoles.ADMIN && updateData.license) {
+    // تحديث license للـ admin
+    Object.assign(user, updateData);
+    
+    // تحديث license في الـ pharmacy أيضاً
+    if (user.pharmacyId) {
+      await Pharmacy.findByIdAndUpdate(user.pharmacyId, { license: updateData.license });
+    }
+    
+    await user.save();
   } else {
-    // تحديث عادي بدون إنشاء صيدلية
+    // تحديث عادي بدون تغيير license
+    if (updateData.license) {
+      delete updateData.license;
+    }
     Object.assign(user, updateData);
     await user.save();
   }
 
-  const updatedUser = await Users.findById(id);
+  const updatedUser = await Users.findById(id, { __v: 0, password: 0 });
 
   res.json({ status: httpStatus.success, data: { user: updatedUser } });
 });

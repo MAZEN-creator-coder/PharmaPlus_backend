@@ -125,7 +125,7 @@ const deletePharmacy = asyncWrapper(async (req, res) => {
 });
 
 const getMedicinesByPharmacyId = asyncWrapper(async (req, res) => {
-  const medicines = await Medicine.find({ pharmacyId: req.params.id });
+  const medicines = await Medicine.find({ pharmacy: req.params.id });
 
   res.json({
     status: httpStatus.success,
@@ -159,8 +159,8 @@ const getTopMedicines = asyncWrapper(async (req, res) => {
   const medicineMap = {};
   orders.forEach(order => {
     order.items.forEach(item => {
-      if (!medicineMap[item.medicineId]) medicineMap[item.medicineId] = 0;
-      medicineMap[item.medicineId] += item.quantity;
+      if (!medicineMap[item.medicine]) medicineMap[item.medicine] = 0;
+      medicineMap[item.medicine] += item.quantity;
     });
   });
 
@@ -175,13 +175,18 @@ const getTopMedicines = asyncWrapper(async (req, res) => {
 const getSalesByCategory = asyncWrapper(async (req, res) => {
   const pharmacyId = req.params.id;
 
-  const orders = await Order.find({ pharmacyId });
+  const orders = await Order.find({ pharmacyId }).populate('items.medicine');
 
   const categoryMap = {};
   orders.forEach(order => {
     order.items.forEach(item => {
-      if (!categoryMap[item.category]) categoryMap[item.category] = 0;
-      categoryMap[item.category] += item.price * item.quantity;
+      if (item.medicine) {
+        const category = item.medicine.category || 'Uncategorized';
+        const price = item.medicine.price || 0;
+        
+        if (!categoryMap[category]) categoryMap[category] = 0;
+        categoryMap[category] += price * item.quantity;
+      }
     });
   });
 
@@ -191,12 +196,41 @@ const getSalesByCategory = asyncWrapper(async (req, res) => {
 const getLowStockAlerts = asyncWrapper(async (req, res) => {
   const pharmacyId = req.params.id;
 
-  const lowStock = await Medicine.find({
-    pharmacyId,
-    stock: { $lte: 10 }
+  const pharmacy = await Pharmacy.findById(pharmacyId);
+  if (!pharmacy) {
+    return res.status(404).json({
+      status: httpStatus.error,
+      message: "Pharmacy not found"
+    });
+  }
+
+  const medicines = await Medicine.find({ pharmacy: pharmacyId });
+  
+  const allMedicinesCount = await Medicine.countDocuments({});
+  const medicinesWithValidPharmacy = await Medicine.countDocuments({ 
+    pharmacy: { $exists: true, $ne: null } 
   });
 
-  res.json({ status: httpStatus.success, pharmacyId, lowStock });
+  const lowStockMedicines = medicines.filter(medicine => 
+    medicine.stock <= medicine.threshold
+  ).map(medicine => ({
+    medicineId: medicine._id,
+    name: medicine.name,
+    category: medicine.category,
+    currentStock: medicine.stock,
+    threshold: medicine.threshold,
+    status: medicine.status,
+    unitsBelow: medicine.threshold - medicine.stock
+  }));
+
+  res.json({ 
+    status: httpStatus.success, 
+    pharmacyId,
+    pharmacyName: pharmacy.name,
+    totalMedicinesInPharmacy: medicines.length,
+    totalLowStockMedicines: lowStockMedicines.length,
+    lowStockMedicines
+  });
 });
 
 const getCustomerAnalytics = asyncWrapper(async (req, res) => {

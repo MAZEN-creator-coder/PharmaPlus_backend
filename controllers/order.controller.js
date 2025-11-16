@@ -41,6 +41,12 @@ const createOrder = asyncWrapper(async (req, res) => {
     throw error;
   }
 
+  if (pharmacy.status !== "active") {
+    const error = new Error("Pharmacy is not active. Cannot place order");
+    error.statusCode = 400;
+    throw error;
+  }
+
   for (let item of items) {
     if (!item.medicine) {
       const error = new Error("medicine id is required for all items");
@@ -86,6 +92,14 @@ const createOrder = asyncWrapper(async (req, res) => {
   };
 
   const newOrder = await Order.create(orderData);
+
+  for (let item of items) {
+    await Medicine.findByIdAndUpdate(
+      item.medicine,
+      { $inc: { stock: -item.quantity } },
+      { new: true }
+    );
+  }
 
   res.status(201).json({
     status: httpStatus.success,

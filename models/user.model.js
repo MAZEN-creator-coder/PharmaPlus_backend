@@ -41,18 +41,20 @@ const userSchema = new mongoose.Schema({
   dob: String,
   joined: String,
   
-  // 📍 العنوان (مطلوب - يُستخدم عند إنشاء صيدلية للـ admin)
+  license: {
+    type: String,
+    default: null
+  },
+  
   address: {
     type: String,
   },
 
-  // 🌍 الموقع الجغرافي (من Geolocation - الفرونت هو اللى يحطه)
   position: {
     lat: { type: Number },
     lng: { type: Number }
   },
 
-  // ربط المستخدم بالصيدلية (للـ admin فقط)
   pharmacyId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Pharmacy',
