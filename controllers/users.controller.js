@@ -297,30 +297,38 @@ const updateUser = asyncWrapper(async (req, res, next) => {
     return next(error);
   }
 
-  // إذا تم تغيير الـ role إلى admin وكان المستخدم ليس لديه صيدلية
   if (updateData.role === userRoles.ADMIN && user.role !== userRoles.ADMIN) {
-    // تحقق من وجود license
     if (!updateData.license) {
       const error = new Error("License is required for admin users");
       error.statusCode = 400;
       return next(error);
     }
-    // تحديث المستخدم أولاً
-    user.set(updateData);
-    // ثم إنشاء الصيدلية
-    await createPharmacyForAdmin(user);
+
+    const existingPharmacy = await Pharmacy.findOne({ managerId: id });
+
+    if (existingPharmacy) {
+      user.set(updateData);
+      user.pharmacyId = existingPharmacy._id;
+      
+      if (updateData.license) {
+        await Pharmacy.findByIdAndUpdate(existingPharmacy._id, { license: updateData.license });
+      }
+      
+      console.log(`✅ تم ربط الـ User ${id} بـ الصيدلية الموجودة: ${existingPharmacy._id}`);
+    } else {
+      user.set(updateData);
+      await createPharmacyForAdmin(user);
+      console.log(`✅ تم إنشاء صيدلية جديدة للـ User ${id}`);
+    }
   } else if (updateData.role === userRoles.ADMIN && updateData.license) {
-    // تحديث license للـ admin
     Object.assign(user, updateData);
     
-    // تحديث license في الـ pharmacy أيضاً
     if (user.pharmacyId) {
       await Pharmacy.findByIdAndUpdate(user.pharmacyId, { license: updateData.license });
     }
     
     await user.save();
   } else {
-    // تحديث عادي بدون تغيير license
     if (updateData.license) {
       delete updateData.license;
     }
