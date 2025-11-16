@@ -153,6 +153,7 @@ const getOrdersByUser = asyncWrapper(async (req, res) => {
   const total = await Order.countDocuments({ userId });
   const orders = await Order.find({ userId })
     .populate("pharmacyId", "name position")
+    .populate({ path: 'items.medicine', select: 'name' })
     .skip(skip)
     .limit(limit)
     .sort({ createdAt: -1 });
