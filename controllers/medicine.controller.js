@@ -165,6 +165,9 @@ const getMedicinesByPharmacy = asyncWrapper(async (req, res) => {
 const getMedicinesByName = asyncWrapper(async (req, res) => {
   const { name } = req.query;
   const { lat, lng } = req.query;
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const skip = (page - 1) * limit;
 
   if (!lat || !lng) {
     const error = new Error("User location (lat, lng) is required");
@@ -194,9 +197,15 @@ const getMedicinesByName = asyncWrapper(async (req, res) => {
     })
     .filter((med) => med && med.distance <= maxDistanceKm);
 
+  const total = medicinesNearby.length;
+  const paginatedMedicines = medicinesNearby.slice(skip, skip + limit);
+
   res.json({
     status: "success",
-    data: { medicines: medicinesNearby },
+    data: { 
+      medicines: paginatedMedicines,
+      pagination: { total, page, limit, totalPages: Math.ceil(total / limit) }
+    },
   });
 });
 
