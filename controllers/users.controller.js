@@ -350,78 +350,93 @@ const updateProfile = asyncWrapper(async (req, res, next) => {
 
   res.json({ status: httpStatus.success, data: { user: updatedUser } });
 });
-
 const updateUser = asyncWrapper(async (req, res, next) => {
-  const { id } = req.params;
-  const updateData = { ...req.body };
+const { id } = req.params;
+const updateData = { ...req.body };
 
-  if (req.file) {
-    updateData.avatar = `uploads/${req.file.filename}`;
-  }
+if (req.file) {
+updateData.avatar = `uploads/${req.file.filename}`;
+}
 
-  if (updateData.firstname || updateData.lastname) {
-    updateData.fullName = `${updateData.firstname || ""} ${
+if (updateData.firstname || updateData.lastname) {
+updateData.fullName = `${updateData.firstname || ""} ${
       updateData.lastname || ""
     }`.trim();
+}
+
+const user = await Users.findById(id);
+if (!user) {
+const error = new Error("User not found");
+error.statusCode = 404;
+return next(error);
+}
+
+// -----------------------
+// Check email uniqueness
+// -----------------------
+if (updateData.email && updateData.email !== user.email) {
+const existingUser = await Users.findOne({ email: updateData.email });
+if (existingUser) {
+const error = new Error("Email is already in use");
+error.statusCode = 400;
+return next(error);
+}
+}
+
+if (updateData.role === userRoles.ADMIN && user.role !== userRoles.ADMIN) {
+if (!user.license) {
+const error = new Error("User must have a license to become an admin");
+error.statusCode = 400;
+return next(error);
+}
+
+
+const existingPharmacy = await Pharmacy.findOne({ managerId: id });
+
+if (existingPharmacy) {
+  user.set(updateData);
+  user.pharmacyId = existingPharmacy._id;
+
+  if (updateData.license) {
+    await Pharmacy.findByIdAndUpdate(existingPharmacy._id, {
+      license: updateData.license,
+    });
   }
 
-  const user = await Users.findById(id);
-  if (!user) {
-    const error = new Error("User not found");
-    error.statusCode = 404;
-    return next(error);
-  }
+  console.log(
+    `✅ تم ربط الـ User ${id} بـ الصيدلية الموجودة: ${existingPharmacy._id}`
+  );
+} else {
+  user.set(updateData);
+  await createPharmacyForAdmin(user);
+  console.log(`✅ تم إنشاء صيدلية جديدة للـ User ${id}`);
+}
 
-  if (updateData.role === userRoles.ADMIN && user.role !== userRoles.ADMIN) {
-    if (!user.license) {
-      const error = new Error("User must have a license to become an admin");
-      error.statusCode = 400;
-      return next(error);
-    }
 
-    const existingPharmacy = await Pharmacy.findOne({ managerId: id });
+} else if (updateData.role === userRoles.ADMIN && updateData.license) {
+Object.assign(user, updateData);
 
-    if (existingPharmacy) {
-      user.set(updateData);
-      user.pharmacyId = existingPharmacy._id;
+if (user.pharmacyId) {
+  await Pharmacy.findByIdAndUpdate(user.pharmacyId, {
+    license: updateData.license,
+  });
+}
 
-      if (updateData.license) {
-        await Pharmacy.findByIdAndUpdate(existingPharmacy._id, {
-          license: updateData.license,
-        });
-      }
+await user.save();
 
-      console.log(
-        `✅ تم ربط الـ User ${id} بـ الصيدلية الموجودة: ${existingPharmacy._id}`
-      );
-    } else {
-      user.set(updateData);
-      await createPharmacyForAdmin(user);
-      console.log(`✅ تم إنشاء صيدلية جديدة للـ User ${id}`);
-    }
-  } else if (updateData.role === userRoles.ADMIN && updateData.license) {
-    Object.assign(user, updateData);
 
-    if (user.pharmacyId) {
-      await Pharmacy.findByIdAndUpdate(user.pharmacyId, {
-        license: updateData.license,
-      });
-    }
+} else {
+if (updateData.license) {
+delete updateData.license;
+}
+Object.assign(user, updateData);
+await user.save();
+await updateCommonData(user, "user");
+}
 
-    await user.save();
-    
-  } else {
-    if (updateData.license) {
-      delete updateData.license;
-    }
-    Object.assign(user, updateData);
-    await user.save();
-    await updateCommonData(user, "user");
-  }
+const updatedUser = await Users.findById(id, { __v: 0, password: 0 });
 
-  const updatedUser = await Users.findById(id, { __v: 0, password: 0 });
-
-  res.json({ status: httpStatus.success, data: { user: updatedUser } });
+res.json({ status: httpStatus.success, data: { user: updatedUser } });
 });
 
 const addConversation = asyncWrapper(async (req, res, next) => {

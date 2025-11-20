@@ -124,48 +124,62 @@ const getPharmacyById = asyncWrapper(async (req, res) => {
 });
 
 const updatePharmacy = asyncWrapper(async (req, res) => {
-  const update = { ...req.body };
+const update = { ...req.body };
 
-  if (req.file) {
-    update.img = `uploads/${req.file.filename}`;
-  }
+if (req.file) {
+update.img = `uploads/${req.file.filename}`;
+}
 
-  if (update.address && (!update.position || !update.position.lat)) {
-    console.log(`📍 جاري حساب موقع جديد من العنوان المحدث: ${update.address}`);
-    
-    const position = await locationService.getPositionForAddress(update.address);
-    
-    if (position) {
-      update.position = position;
-      console.log(`✅ تم تحديث الموقع: lat=${position.lat}, lng=${position.lng}`);
-    } else {
-      console.log(`⚠️ لم يتم حساب الموقع الجديد`);
-    const error =  new Error("Could not determine location from address please provide valid address or coordinates");
-    error.statusCode = 400;
-    throw error;
+// -----------------------
+// Check email uniqueness
+// -----------------------
+if (update.email) {
+const existingPharmacy = await Pharmacy.findOne({ email: update.email, _id: { $ne: req.params.id } });
+if (existingPharmacy) {
+const error = new Error("Email is already in use by another pharmacy");
+error.statusCode = 400;
+throw error;
+}
+}
 
-    }
-  }
+if (update.address && (!update.position || !update.position.lat)) {
+console.log(`📍 جاري حساب موقع جديد من العنوان المحدث: ${update.address}`);
 
-  const pharmacy = await Pharmacy.findByIdAndUpdate(req.params.id, update, {
-    new: true,
-    runValidators: true
-  });
+const position = await locationService.getPositionForAddress(update.address);
+
+if (position) {
+  update.position = position;
+  console.log(`✅ تم تحديث الموقع: lat=${position.lat}, lng=${position.lng}`);
+} else {
+  console.log(`⚠️ لم يتم حساب الموقع الجديد`);
+  const error = new Error("Could not determine location from address, please provide valid address or coordinates");
+  error.statusCode = 400;
+  throw error;
+}
 
 
-  if (!pharmacy) {
-    return res.status(404).json({
-      status: httpStatus.error,
-      message: "Pharmacy not found"
-    });
-  }
-    await updateCommonData(pharmacy, "pharmacy");
+}
 
-  res.json({
-    status: httpStatus.success,
-    data: { pharmacy }
-  });
+const pharmacy = await Pharmacy.findByIdAndUpdate(req.params.id, update, {
+new: true,
+runValidators: true
 });
+
+if (!pharmacy) {
+return res.status(404).json({
+status: httpStatus.error,
+message: "Pharmacy not found"
+});
+}
+
+await updateCommonData(pharmacy, "pharmacy");
+
+res.json({
+status: httpStatus.success,
+data: { pharmacy }
+});
+});
+
 
 const deletePharmacy = asyncWrapper(async (req, res) => {
 const foundPharmacy = await Pharmacy.findById(req.params.id);
