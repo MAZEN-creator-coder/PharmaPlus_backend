@@ -7,6 +7,9 @@ const usersRouter = require("./routs/users.rout");
 const orderRoutes = require("./routs/orders.rout");
 const medicineRoutes = require("./routs/medicines.rout");
 const pharmacyRoutes = require("./routs/pharmacies.rout");
+const dashboardRoutes = require("./routs/dashboard.rout");
+
+
 const fs = require('fs');
 // Load .env from backend folder if present, otherwise fall back to parent workspace .env
 const envPathLocal = path.join(__dirname, '.env');
@@ -36,6 +39,7 @@ app.use("/api/users",usersRouter);
 app.use("/api/orders",orderRoutes);
 app.use("/api/medicines",medicineRoutes);
 app.use("/api/pharmacies",pharmacyRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 // handling other routes by jsend
 //and to handle unfound routes

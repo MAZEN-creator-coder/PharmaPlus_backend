@@ -1,10 +1,63 @@
 const Pharmacy = require("../models/pharmacy.model");
 const Medicine = require("../models/medicine.model");
+ const Users = require("../models/user.model");
 const Order = require("../models/order.model");
 const httpStatus = require("../utilities/httpstatustext");
 const asyncWrapper = require("../middleware/asyncwrapper");
 const analytics = require("../services/pharmacyAnalytics.service");
 const locationService = require("../services/location.service");
+// ubdate common data in case of user is admin and has pharmacy
+const updateCommonData = async (source, type) => {
+
+  let user, pharmacy;
+
+  // ============ CASE 1: UPDATE FROM USER ===============
+  if (type === "user") {
+    user = source;
+
+    // لازم يكون Admin وصاحب صيدلية
+    if (user.role !== "admin" || !user.pharmacyId) return;
+
+    pharmacy = await Pharmacy.findById(user.pharmacyId);
+    if (!pharmacy) return;
+
+    // المزامنة
+    if (user.phone !== undefined) pharmacy.contact = user.phone;
+    if (user.address !== undefined) pharmacy.address = user.address;
+    if (user.position !== undefined) pharmacy.position = user.position;
+    if (user.license !== undefined) pharmacy.license = user.license;
+    if (user.email !== undefined) pharmacy.email = user.email;
+
+   
+    if (user.fullName !== undefined) pharmacy.name = user.fullName;
+
+    await pharmacy.save();
+  }
+
+  // ============ CASE 2: UPDATE FROM PHARMACY ===============
+  if (type === "pharmacy") {
+    pharmacy = source;
+
+    if (!pharmacy.managerId) return;
+
+    user = await Users.findById(pharmacy.managerId);
+    if (!user || user.role !== "admin") return;
+
+  
+    if (pharmacy.contact !== undefined) user.phone = pharmacy.contact;
+    if (pharmacy.address !== undefined) user.address = pharmacy.address;
+    if (pharmacy.position !== undefined) user.position = pharmacy.position;
+    if (pharmacy.license !== undefined) user.license = pharmacy.license;
+    if (pharmacy.email !== undefined) user.email = pharmacy.email;
+
+    if (pharmacy.name !== undefined) user.fullName = pharmacy.name;
+
+    await user.save();
+  }
+};
+
+
+
 
 const addPharmacy = asyncWrapper(async (req, res) => {
   const img = req.file ? `uploads/${req.file.filename}` : undefined;
@@ -87,6 +140,10 @@ const updatePharmacy = asyncWrapper(async (req, res) => {
       console.log(`✅ تم تحديث الموقع: lat=${position.lat}, lng=${position.lng}`);
     } else {
       console.log(`⚠️ لم يتم حساب الموقع الجديد`);
+    const error =  new Error("Could not determine location from address please provide valid address or coordinates");
+    error.statusCode = 400;
+    throw error;
+
     }
   }
 
@@ -95,12 +152,14 @@ const updatePharmacy = asyncWrapper(async (req, res) => {
     runValidators: true
   });
 
+
   if (!pharmacy) {
     return res.status(404).json({
       status: httpStatus.error,
       message: "Pharmacy not found"
     });
   }
+    await updateCommonData(pharmacy, "pharmacy");
 
   res.json({
     status: httpStatus.success,
@@ -109,6 +168,23 @@ const updatePharmacy = asyncWrapper(async (req, res) => {
 });
 
 const deletePharmacy = asyncWrapper(async (req, res) => {
+const foundPharmacy = await Pharmacy.findById(req.params.id);
+if (!foundPharmacy) {
+    const error = new Error("Pharmacy not found");
+    error.statusCode = 404;
+    throw error;
+  }
+  const associatedMedicines = await Medicine.find({ pharmacy: req.params.id });
+ //delete associated medicines
+  for (const medicine of associatedMedicines) {
+    await medicine.remove();
+  }
+  
+  //delete associated manager user if exists
+  if (foundPharmacy.managerId) {
+
+    await Users.findByIdAndDelete(foundPharmacy.managerId);
+  }
   const pharmacy = await Pharmacy.findByIdAndDelete(req.params.id);
 
   if (!pharmacy) {
