@@ -15,12 +15,16 @@ exports.calculatePharmacyStats = async (pharmacyId) => {
   // Total Orders
   // ---------------------------
   const totalOrders = orders.length;
+  //sum of totals of delivered orders
+  const totalSalesdelvired = orders
+    .filter(o => o.status === "Delivered")
+    .reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
 
   // ---------------------------
   // Total Sales (sum of totals)
   // ---------------------------
-  const totalSales = orders.reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
-
+    // const totalSales = orders.reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
+  const totalSales = totalSalesdelvired;
   // ---------------------------
   // Products in Stock (sum stock)
   // ---------------------------

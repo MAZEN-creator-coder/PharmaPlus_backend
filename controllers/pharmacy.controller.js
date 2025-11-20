@@ -4,7 +4,7 @@ const Medicine = require("../models/medicine.model");
 const Order = require("../models/order.model");
 const httpStatus = require("../utilities/httpstatustext");
 const asyncWrapper = require("../middleware/asyncwrapper");
-const analytics = require("../services/pharmacyAnalytics.service");
+const analytics = require("../services/pharmacyAnalytics(admin).service");
 const locationService = require("../services/location.service");
 // ubdate common data in case of user is admin and has pharmacy
 const updateCommonData = async (source, type) => {

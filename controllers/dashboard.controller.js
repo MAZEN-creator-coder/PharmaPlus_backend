@@ -1,5 +1,5 @@
 // controllers/dashboard.controller.js
-const { getDashboardData } = require("../services/dashboard.service");
+const { getDashboardData } = require("../services/analytics_super.service");
 const asyncWrapper = require("../middleware/asyncwrapper");
 
 const getDashboardController = asyncWrapper(async (req, res) => {

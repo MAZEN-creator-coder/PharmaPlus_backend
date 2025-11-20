@@ -7,7 +7,7 @@ const monthlySalesSchema = new mongoose.Schema({
 
 const pharmacySchema = new mongoose.Schema({
   name: { type: String, required: true },
-  img: { type: String, default: "uploads/pharmacy-default.png" },
+  img: { type: String, default: "uploads/pharmacy-default.jpg" },
 
   license: String,
   contact: String,

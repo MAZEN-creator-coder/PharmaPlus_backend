@@ -7,7 +7,7 @@ const usersRouter = require("./routs/users.rout");
 const orderRoutes = require("./routs/orders.rout");
 const medicineRoutes = require("./routs/medicines.rout");
 const pharmacyRoutes = require("./routs/pharmacies.rout");
-const dashboardRoutes = require("./routs/dashboard.rout");
+const dashboardRoutes = require("./routs/analytics_suepr.rout");
 
 
 const fs = require('fs');
@@ -39,7 +39,7 @@ app.use("/api/users",usersRouter);
 app.use("/api/orders",orderRoutes);
 app.use("/api/medicines",medicineRoutes);
 app.use("/api/pharmacies",pharmacyRoutes);
-app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/analytics-super", dashboardRoutes);
 
 // handling other routes by jsend
 //and to handle unfound routes
