@@ -143,31 +143,41 @@ async function getDashboardData() {
   const topPharmaciesAgg = await Pharmacy.find()
     .sort({ totalSales: -1 })
     .limit(5);
-
-  const topPharmacies = await Promise.all(
-    topPharmaciesAgg.map(async p => {
-      const stockAgg = await Medicine.aggregate([
-        { $match: { pharmacy: p._id } },
-        {
-          $group: {
-            _id: null,
-            stockValue: { $sum: { $multiply: ["$stock", "$price"] } }
-          }
+const topPharmacies = await Promise.all(
+  topPharmaciesAgg.map(async p => {
+    const stockAgg = await Medicine.aggregate([
+      { $match: { pharmacy: p._id } },
+      {
+        $group: {
+          _id: null,
+          stockValue: { $sum: { $multiply: ["$stock", "$price"] } }
         }
-      ]);
+      }
+    ]);
 
-      const totalPharmacyOrders = await Order.countDocuments({
-        pharmacyId: p._id
-      });
+    const totalPharmacyOrders = await Order.countDocuments({
+      pharmacyId: p._id
+    });
 
-      return {
-        name: p.name,
-        sales: p.totalSales,
-        stockValue: stockAgg[0]?.stockValue || 0,
-        totalOrders: totalPharmacyOrders
-      };
-    })
-  );
+    // عدد الطلبات اللي اتخدمت (Delivered)
+    const servedOrders = await Order.countDocuments({
+      pharmacyId: p._id,
+      status: "Delivered"
+    });
+
+    return {
+      id: p._id,                     
+      name: p.name,
+      location: p.address,            // ← جديد
+      status: p.status,               // ← جديد
+      served: servedOrders,           // ← جديد
+      sales: p.totalSales,
+      stockValue: stockAgg[0]?.stockValue || 0,
+      totalOrders: totalPharmacyOrders
+    };
+  })
+);
+
   // -----------------------------------------
 // 6) Daily Sales For Current Month
 // -----------------------------------------
