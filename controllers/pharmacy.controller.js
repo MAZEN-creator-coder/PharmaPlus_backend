@@ -142,22 +142,24 @@ throw error;
 }
 }
 
-if (update.address && (!update.position || !update.position.lat)) {
-console.log(`📍 جاري حساب موقع جديد من العنوان المحدث: ${update.address}`);
+// Handle position updates
+if (update.address) {
+  // If position is provided with address, use it
+  if (update.position && update.position.lat && update.position.lng) {
+    console.log(`✅ استخدام الموقع المرسل: lat=${update.position.lat}, lng=${update.position.lng}`);
+  } else {
+    // Try to calculate position from address
+    console.log(`📍 جاري حساب موقع جديد من العنوان المحدث: ${update.address}`);
+    const position = await locationService.getPositionForAddress(update.address);
 
-const position = await locationService.getPositionForAddress(update.address);
-
-if (position) {
-  update.position = position;
-  console.log(`✅ تم تحديث الموقع: lat=${position.lat}, lng=${position.lng}`);
-} else {
-  console.log(`⚠️ لم يتم حساب الموقع الجديد`);
-  const error = new Error("Could not determine location from address, please provide valid address or coordinates");
-  error.statusCode = 400;
-  throw error;
-}
-
-
+    if (position) {
+      update.position = position;
+      console.log(`✅ تم تحديث الموقع: lat=${position.lat}, lng=${position.lng}`);
+    } else {
+      console.log(`⚠️ لم يتم حساب الموقع الجديد - سيتم الاحتفاظ بالموقع القديم`);
+      // Don't throw error, just keep old position
+    }
+  }
 }
 
 const pharmacy = await Pharmacy.findByIdAndUpdate(req.params.id, update, {

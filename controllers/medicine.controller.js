@@ -158,7 +158,10 @@ const getLowStockMedicinesByPharmacy = asyncWrapper(async (req, res) => {
 
 const getMedicinesByPharmacy = asyncWrapper(async (req, res) => {
   const { pharmacyId } = req.params;
-  const medicines = await Medicine.find({ pharmacy: pharmacyId });
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const skip = (page - 1) * limit;
+  const medicines = await Medicine.find({ pharmacy: pharmacyId }).skip(skip).limit(limit);
   res.json({ status: httpStatus.success, data: { medicines } });
 });
 
@@ -169,39 +172,50 @@ const getMedicinesByName = asyncWrapper(async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
 
-  if (!lat || !lng) {
-    const error = new Error("User location (lat, lng) is required");
+  if (!name) {
+    const error = new Error("Medicine name is required");
     error.statusCode = 400;
     throw error;
   }
 
   const regex = new RegExp(name, "i");
-  const medicines = await Medicine.find({ name: regex }).populate("pharmacy", "name position");
+  const medicines = await Medicine.find({ name: regex }).populate("pharmacy");
 
-  const maxDistanceKm = 100000;
-  const medicinesNearby = medicines
-    .map((med) => {
-      if (!med.pharmacy?.position) return null;
+  // Filter medicines - only from active pharmacies
+  const activeMedicines = medicines.filter(med => {
+    return med.pharmacy && med.pharmacy.status === "active";
+  });
 
-      const distance = getDistanceFromLatLonInKm(
-        parseFloat(lat),
-        parseFloat(lng),
-        med.pharmacy.position.lat,
-        med.pharmacy.position.lng
-      );
+  // If location data provided, calculate distance
+  let filteredMedicines = activeMedicines;
+  if (lat && lng) {
+    const maxDistanceKm = 100000;
+    filteredMedicines = activeMedicines
+      .map((med) => {
+        if (!med.pharmacy?.position) return null;
 
-      return {
-        ...med.toObject(),
-        distance: parseFloat(distance.toFixed(2)),
-      };
-    })
-    .filter((med) => med && med.distance <= maxDistanceKm);
+        const distance = getDistanceFromLatLonInKm(
+          parseFloat(lat),
+          parseFloat(lng),
+          med.pharmacy.position.lat,
+          med.pharmacy.position.lng
+        );
 
-  const total = medicinesNearby.length;
-  const paginatedMedicines = medicinesNearby.slice(skip, skip + limit);
+        return {
+          ...med.toObject(),
+          distance: parseFloat(distance.toFixed(2)),
+        };
+      })
+      .filter((med) => med && med.distance <= maxDistanceKm);
+  } else {
+    filteredMedicines = activeMedicines.map(med => med.toObject());
+  }
+
+  const total = filteredMedicines.length;
+  const paginatedMedicines = filteredMedicines.slice(skip, skip + limit);
 
   res.json({
-    status: "success",
+    status: httpStatus.success,
     data: { 
       medicines: paginatedMedicines,
       pagination: { total, page, limit, totalPages: Math.ceil(total / limit) }
