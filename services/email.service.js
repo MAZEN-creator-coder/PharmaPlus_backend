@@ -1,4 +1,7 @@
 const nodemailer = require("nodemailer");
+const dotenv = require("dotenv");
+dotenv.config();
+
 
 if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
   console.warn(
@@ -66,28 +69,32 @@ const isGmailAddress = (email) => {
 const buildEmailVerificationHTML = (user, verificationToken) => {
   const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${verificationToken}`;
   const logoUrl = process.env.EMAIL_LOGO_URL || "";
-  
+
   return `
   <div style="font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; color: #333; max-width: 700px; margin: auto; padding: 24px; background: #f9fafb;">
     <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #e6e6e6;">
       <div style="display:flex; align-items:center; gap:12px;">
-        ${logoUrl ? `<img src='${logoUrl}' alt='logo' style='width:72px; height:auto; object-fit:cover; border-radius:8px;'/>` : ""}
-        <h1 style="margin:0; color:#2f855a; font-size:20px;">مرحباً بك في PharmaPlus! 🎉</h1>
+        ${
+          logoUrl
+            ? `<img src='${logoUrl}' alt='logo' style='width:72px; height:auto; object-fit:cover; border-radius:8px;'/>`
+            : ""
+        }
+        <h1 style="margin:0; color:#2f855a; font-size:20px;">Welcome to PharmaPlus! 🎉</h1>
       </div>
-      <p style="color:#666;">مرحباً ${user.firstname || user.fullName || ""},</p>
-      <p style="color:#444">شكراً لتسجيلك معنا. الرجاء تأكيد بريدك الإلكتروني بالضغط على الزر أدناه:</p>
+      <p style="color:#666;">Hello ${user.firstname || user.fullName || ""},</p>
+      <p style="color:#444">Thank you for signing up with us. Please confirm your email address by clicking the button below:</p>
       
       <div style="margin: 24px 0; text-align: center;">
         <a href="${verificationUrl}" style="background:#2f855a; color:#fff; padding:12px 24px; border-radius:6px; text-decoration:none; display:inline-block; font-weight:bold;">
-          تأكيد البريد الإلكتروني ✓
+          Confirm Email Address ✓
         </a>
       </div>
       
-      <p style="color:#777; font-size:13px">أو انسخ الرابط التالي في المتصفح:</p>
+      <p style="color:#777; font-size:13px">Or copy the following link to your browser:</p>
       <p style="background:#f5f5f5; padding:10px; border-radius:4px; word-break:break-all; font-size:12px;">${verificationUrl}</p>
       
       <hr style="margin:18px 0; border-color:#eee;" />
-      <p style="color:#999; font-size:12px;">هذا الرابط صالح لمدة 24 ساعة فقط. إذا لم تقم بالتسجيل، يمكنك تجاهل هذا الإيميل.</p>
+      <p style="color:#999; font-size:12px;">This link is valid for 24 hours only. If you didn't sign up, you can safely ignore this email.</p>
     </div>
   </div>
   `;
@@ -97,28 +104,32 @@ const buildEmailVerificationHTML = (user, verificationToken) => {
 const buildPasswordResetHTML = (user, resetToken) => {
   const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
   const logoUrl = process.env.EMAIL_LOGO_URL || "";
-  
+
   return `
   <div style="font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; color: #333; max-width: 700px; margin: auto; padding: 24px; background: #f9fafb;">
     <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #e6e6e6;">
       <div style="display:flex; align-items:center; gap:12px;">
-        ${logoUrl ? `<img src='${logoUrl}' alt='logo' style='width:72px; height:auto; object-fit:cover; border-radius:8px;'/>` : ""}
-        <h1 style="margin:0; color:#2f855a; font-size:20px;">إعادة تعيين كلمة المرور 🔐</h1>
+        ${
+          logoUrl
+            ? `<img src='${logoUrl}' alt='logo' style='width:72px; height:auto; object-fit:cover; border-radius:8px;'/>`
+            : ""
+        }
+        <h1 style="margin:0; color:#2f855a; font-size:20px;">Password Reset 🔐</h1>
       </div>
-      <p style="color:#666;">مرحباً ${user.firstname || user.fullName || ""},</p>
-      <p style="color:#444">تلقينا طلباً لإعادة تعيين كلمة المرور الخاصة بحسابك.</p>
+      <p style="color:#666;">Hello ${user.firstname || user.fullName || ""},</p>
+      <p style="color:#444">We received a request to reset the password for your account.</p>
       
       <div style="margin: 24px 0; text-align: center;">
         <a href="${resetUrl}" style="background:#2196F3; color:#fff; padding:12px 24px; border-radius:6px; text-decoration:none; display:inline-block; font-weight:bold;">
-          إعادة تعيين كلمة المرور 🔑
+          Reset Password 🔑
         </a>
       </div>
       
-      <p style="color:#777; font-size:13px">أو انسخ الرابط التالي في المتصفح:</p>
+      <p style="color:#777; font-size:13px">Or copy the following link to your browser:</p>
       <p style="background:#f5f5f5; padding:10px; border-radius:4px; word-break:break-all; font-size:12px;">${resetUrl}</p>
       
       <hr style="margin:18px 0; border-color:#eee;" />
-      <p style="color:#999; font-size:12px;">هذا الرابط صالح لمدة ساعة واحدة فقط. إذا لم تطلب إعادة تعيين كلمة المرور، يمكنك تجاهل هذا الإيميل بأمان.</p>
+      <p style="color:#999; font-size:12px;">This link is valid for 1 hour only. If you did not request a password reset, you can safely ignore this email.</p>
     </div>
   </div>
   `;
@@ -142,10 +153,10 @@ const buildOrderPlacedHTML = (order, user, pharmacy) => {
   return `
   <div style="font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; color: #333; max-width: 700px; margin: auto; padding: 24px; background: #f9fafb;">
     <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #e6e6e6;">
-      <div style="display:flex; align-items:center; gap:12px;">
+      <div style="display:flex; align-items:center;  gap:20px;">
         ${
           logoUrl
-            ? `<img src='${logoUrl}' alt='logo' style='width:72px; height:auto; object-fit:cover; border-radius:8px;'/>`
+            ? `<img src='${logoUrl}' alt='logo' style='width:72px; height:auto; object-fit:cover; border-radius:5px;'/>`
             : ""
         }
         <h1 style="margin:0; color:#2f855a; font-size:20px;">Thanks for your order</h1>
@@ -248,14 +259,14 @@ const buildOrderDeliveredHTML = (order, user, pharmacy) => {
 const sendVerificationEmail = async (user, verificationToken) => {
   if (!user?.email) throw new Error("User email is required");
   const html = buildEmailVerificationHTML(user, verificationToken);
-  const subject = "تأكيد البريد الإلكتروني - PharmaPlus";
+  const subject = "Email Verification - PharmaPlus";
   return sendMail({ to: user.email, subject, html });
 };
 
 const sendPasswordResetEmail = async (user, resetToken) => {
   if (!user?.email) throw new Error("User email is required");
   const html = buildPasswordResetHTML(user, resetToken);
-  const subject = "إعادة تعيين كلمة المرور - PharmaPlus";
+  const subject = "Password Reset - PharmaPlus";
   return sendMail({ to: user.email, subject, html });
 };
 

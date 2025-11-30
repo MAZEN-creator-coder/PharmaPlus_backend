@@ -207,6 +207,7 @@ const getMedicinesByName = asyncWrapper(async (req, res) => {
         };
       })
       .filter((med) => med && med.distance <= maxDistanceKm);
+      filteredMedicines.sort((a, b) => a.distance - b.distance);
   } else {
     filteredMedicines = activeMedicines.map(med => med.toObject());
   }
