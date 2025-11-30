@@ -137,6 +137,7 @@ const buildPasswordResetHTML = (user, resetToken) => {
 
 // ========== Order Templates (الموجودة بالفعل) ==========
 const buildOrderPlacedHTML = (order, user, pharmacy) => {
+   const orderUrl = `${process.env.FRONTEND_URL}/profile`;
   const itemsHtml = (order.items || [])
     .map(
       (it, index) =>
@@ -184,7 +185,7 @@ const buildOrderPlacedHTML = (order, user, pharmacy) => {
         order.address?.street || ""
       } ${order.address?.city || ""}</p>
       <div style="margin-top:18px; display:flex; gap:10px;">
-        <a href="#" style="background:#2f855a; color:#fff; padding:10px 14px; border-radius:6px; text-decoration:none;">View order</a>
+        <a href="${orderUrl}" style="background:#2f855a; color:#fff; padding:10px 14px; border-radius:6px; text-decoration:none;">View order</a>
         <a href="mailto:${
           pharmacy.email || process.env.EMAIL_USER
         }" style="border:1px solid #e2e8f0; color:#2f855a; padding:10px 14px; border-radius:6px; text-decoration:none;">Contact support</a>
@@ -197,6 +198,7 @@ const buildOrderPlacedHTML = (order, user, pharmacy) => {
 };
 
 const buildOrderDeliveredHTML = (order, user, pharmacy) => {
+const orderUrl = `${process.env.FRONTEND_URL}/profile`;
   const itemsHtml = (order.items || [])
     .map(
       (it, index) =>
@@ -244,7 +246,7 @@ const buildOrderDeliveredHTML = (order, user, pharmacy) => {
         order.address?.street || ""
       } ${order.address?.city || ""}</p>
       <div style="margin-top:18px;">
-        <a href="#" style="background:#2f855a; color:#fff; padding:10px 14px; border-radius:6px; text-decoration:none;">View order</a>
+        <a href= "${orderUrl}" style="background:#2f855a; color:#fff; padding:10px 14px; border-radius:6px; text-decoration:none;">View order</a>
       </div>
       <hr style="margin-top:18px; border-color:#eee;" />
       <p style="color:#999; font-size:12px;">If you need help, reply to this email or contact the pharmacy at ${
