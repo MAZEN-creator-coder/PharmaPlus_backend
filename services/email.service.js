@@ -2,7 +2,6 @@ const nodemailer = require("nodemailer");
 const dotenv = require("dotenv");
 dotenv.config();
 
-
 if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
   console.warn(
     "EMAIL_USER or EMAIL_PASS not set — email sending will fail until configured"
@@ -137,7 +136,7 @@ const buildPasswordResetHTML = (user, resetToken) => {
 
 // ========== Order Templates (الموجودة بالفعل) ==========
 const buildOrderPlacedHTML = (order, user, pharmacy) => {
-   const orderUrl = `${process.env.FRONTEND_URL}/profile`;
+  const orderUrl = `${process.env.FRONTEND_URL}/profile`;
   const itemsHtml = (order.items || [])
     .map(
       (it, index) =>
@@ -150,17 +149,18 @@ const buildOrderPlacedHTML = (order, user, pharmacy) => {
         }</td>\n            </tr>`
     )
     .join("");
- const logoUrl = process.env.EMAIL_LOGO_URL || "";
+  const logoUrl = process.env.EMAIL_LOGO_URL || "";
   return `
   <div style="font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; color: #333; max-width: 700px; margin: auto; padding: 24px; background: #f9fafb;">
     <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #e6e6e6;">
-      <div style="display:flex; align-items:center;  gap:20px;">
+      <div style="display:flex; align-items:center;  gap:12px;"> 
         ${
-          logoUrl
-            ? `<img src="${logoUrl}" alt='logo' style='width:72px; height:auto; object-fit:cover; border-radius:5px;'/>`
-            : ""
-        }
-        <h1 style="margin:0; color:#2f855a; font-size:20px;">Thanks for your order</h1>
+    logoUrl
+      ? `<img src="${logoUrl}" alt='logo' style='width:150px; height:auto; object-fit:cover; border-radius:8px;'/>` // تم توحيد الحجم والـ radius
+      : ""
+  }
+ <h1 style="margin:0; color:#2f855a; font-size:20px;">Thanks for your order</h1>
+
       </div>
       <p style="color:#666;">Hi ${user.firstname || user.fullName || ""},</p>
       <p style="color:#444">We've received your order <strong>#${
@@ -198,7 +198,7 @@ const buildOrderPlacedHTML = (order, user, pharmacy) => {
 };
 
 const buildOrderDeliveredHTML = (order, user, pharmacy) => {
-const orderUrl = `${process.env.FRONTEND_URL}/profile`;
+  const orderUrl = `${process.env.FRONTEND_URL}/profile`;
   const itemsHtml = (order.items || [])
     .map(
       (it, index) =>
