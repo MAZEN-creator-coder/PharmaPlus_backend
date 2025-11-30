@@ -6,6 +6,8 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const userRoles = require("../utilities/userRoles");
 const locationService = require("../services/location.service");
+const crypto = require("crypto");
+const emailService = require("../services/email.service");
 
 const createPharmacyForAdmin = async (user) => {
   try {
@@ -155,11 +157,14 @@ const register = asyncWrapper(async (req, res, next) => {
     return next(error);
   }
 
-  // Hash password
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(password, salt);
 
   const filename = req.file?.filename || "avatar.webp";
+
+  // ========== إنشاء Verification Token ==========
+  const verificationToken = crypto.randomBytes(32).toString("hex");
+  const verificationExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 ساعة
 
   const newUser = new Users({
     firstname,
@@ -179,6 +184,10 @@ const register = asyncWrapper(async (req, res, next) => {
       smsAlerts: false,
     },
     conversations: [],
+    // ========== حقول الـ verification ==========
+    isEmailVerified: false,
+    emailVerificationToken: verificationToken,
+    emailVerificationExpires: verificationExpires,
   });
 
   if (latitude && longitude) {
@@ -187,48 +196,39 @@ const register = asyncWrapper(async (req, res, next) => {
       lng: parseFloat(longitude),
     };
     console.log(`✅ تم حفظ Geolocation: lat=${latitude}, lng=${longitude}`);
-  } else {
-    console.log(`⚠️ لم يتم إرسال Geolocation من Frontend`);
   }
 
   if (newUser.role === userRoles.ADMIN) {
     await createPharmacyForAdmin(newUser);
   }
 
-  // Generate JWT token
-  const userToken = jwt.sign(
-    {
-      id: newUser._id,
-      email: newUser.email,
-      role: newUser.role,
-      image: newUser.avatar,
-      pharmacyId: newUser.pharmacyId || null,
-    },
-    process.env.JWT_SECRET_KEY,
-    { expiresIn: "24h" }
-  );
-
-  newUser.token = userToken;
   await newUser.save();
 
+  // ========== إرسال Email Verification ==========
+  try {
+    await emailService.sendVerificationEmail(newUser, verificationToken);
+    console.log(`✅ تم إرسال إيميل التأكيد إلى: ${newUser.email}`);
+  } catch (emailError) {
+    console.error("خطأ في إرسال إيميل التأكيد:", emailError);
+    // الاستمرار حتى لو فشل الإيميل
+  }
+
+  // ملاحظة: لا نرسل token هنا - المستخدم لازم يأكد إيميله الأول
   res.status(201).json({
     status: httpStatus.success,
+    message: "تم التسجيل بنجاح. الرجاء التحقق من بريدك الإلكتروني لتأكيد الحساب",
     data: {
-      token: userToken,
       user: {
         _id: newUser._id,
         firstname: newUser.firstname,
         lastname: newUser.lastname,
         email: newUser.email,
         role: newUser.role,
-        address: newUser.address,
-        position: newUser.position,
-        license: newUser.license || null,
-        pharmacyId: newUser.pharmacyId || null,
       },
     },
   });
 });
+
 
 const login = asyncWrapper(async (req, res, next) => {
   const { email, password } = req.body;
@@ -243,6 +243,13 @@ const login = asyncWrapper(async (req, res, next) => {
   if (!existingUser) {
     const error = new Error("User not found");
     error.statusCode = 404;
+    return next(error);
+  }
+
+  // ========== تحقق من تأكيد البريد الإلكتروني ==========
+  if (!existingUser.isEmailVerified) {
+    const error = new Error("الرجاء تأكيد بريدك الإلكتروني أولاً");
+    error.statusCode = 403;
     return next(error);
   }
 
@@ -262,7 +269,7 @@ const login = asyncWrapper(async (req, res, next) => {
       pharmacyId: existingUser.pharmacyId || null,
     },
     process.env.JWT_SECRET_KEY,
-    { expiresIn: "1h" }
+    { expiresIn: "24h" }
   );
 
   existingUser.token = userToken;
@@ -273,6 +280,7 @@ const login = asyncWrapper(async (req, res, next) => {
     data: { token: userToken },
   });
 });
+
 
 const getUserById = asyncWrapper(async (req, res, next) => {
   const { id } = req.params;
@@ -513,7 +521,161 @@ const deleteUser = asyncWrapper(async (req, res, next) => {
     message: "User deleted successfully",
   });
 });
+const verifyEmail = asyncWrapper(async (req, res, next) => {
+  const { token } = req.params;
 
+  const user = await Users.findOne({
+    emailVerificationToken: token,
+    emailVerificationExpires: { $gt: Date.now() },
+  });
+
+  if (!user) {
+    const error = new Error("رابط التأكيد غير صالح أو منتهي الصلاحية");
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  user.isEmailVerified = true;
+  user.emailVerificationToken = undefined;
+  user.emailVerificationExpires = undefined;
+  await user.save();
+
+  res.json({
+    status: httpStatus.success,
+    message: "تم تأكيد البريد الإلكتروني بنجاح! يمكنك الآن تسجيل الدخول",
+  });
+});
+
+// إعادة إرسال رابط التأكيد
+const resendVerification = asyncWrapper(async (req, res, next) => {
+  const { email } = req.body;
+
+  if (!email) {
+    const error = new Error("البريد الإلكتروني مطلوب");
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  const user = await Users.findOne({ email });
+  if (!user) {
+    const error = new Error("لا يوجد مستخدم بهذا البريد الإلكتروني");
+    error.statusCode = 404;
+    return next(error);
+  }
+
+  if (user.isEmailVerified) {
+    const error = new Error("البريد الإلكتروني مؤكد بالفعل");
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  // إنشاء token جديد
+  const verificationToken = crypto.randomBytes(32).toString("hex");
+  const verificationExpires = Date.now() + 24 * 60 * 60 * 1000;
+
+  user.emailVerificationToken = verificationToken;
+  user.emailVerificationExpires = verificationExpires;
+  await user.save();
+
+  // إرسال الإيميل
+  try {
+    await emailService.sendVerificationEmail(user, verificationToken);
+    console.log(`✅ تم إعادة إرسال إيميل التأكيد إلى: ${user.email}`);
+  } catch (emailError) {
+    console.error("خطأ في إرسال الإيميل:", emailError);
+    const error = new Error("فشل في إرسال البريد الإلكتروني");
+    error.statusCode = 500;
+    return next(error);
+  }
+
+  res.json({
+    status: httpStatus.success,
+    message: "تم إعادة إرسال رابط التأكيد إلى بريدك الإلكتروني",
+  });
+});
+
+// طلب إعادة تعيين كلمة المرور
+const forgotPassword = asyncWrapper(async (req, res, next) => {
+  const { email } = req.body;
+
+  if (!email) {
+    const error = new Error("البريد الإلكتروني مطلوب");
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  const user = await Users.findOne({ email });
+  if (!user) {
+    const error = new Error("لا يوجد مستخدم بهذا البريد الإلكتروني");
+    error.statusCode = 404;
+    return next(error);
+  }
+
+  // إنشاء reset token
+  const resetToken = crypto.randomBytes(32).toString("hex");
+  const resetExpires = Date.now() + 1 * 60 * 60 * 1000; // ساعة واحدة
+
+  user.resetPasswordToken = resetToken;
+  user.resetPasswordExpires = resetExpires;
+  await user.save();
+
+  // إرسال الإيميل
+  try {
+    await emailService.sendPasswordResetEmail(user, resetToken);
+    console.log(`✅ تم إرسال إيميل إعادة التعيين إلى: ${user.email}`);
+  } catch (emailError) {
+    console.error("خطأ في إرسال الإيميل:", emailError);
+    const error = new Error("فشل في إرسال البريد الإلكتروني");
+    error.statusCode = 500;
+    return next(error);
+  }
+
+  res.json({
+    status: httpStatus.success,
+    message: "تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني",
+  });
+});
+
+// إعادة تعيين كلمة المرور
+const resetPassword = asyncWrapper(async (req, res, next) => {
+  const { token } = req.params;
+  const { password } = req.body;
+
+  if (!password) {
+    const error = new Error("كلمة المرور الجديدة مطلوبة");
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  const user = await Users.findOne({
+    resetPasswordToken: token,
+    resetPasswordExpires: { $gt: Date.now() },
+  });
+
+  if (!user) {
+    const error = new Error("رابط إعادة التعيين غير صالح أو منتهي الصلاحية");
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  // تشفير كلمة المرور الجديدة
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(password, salt);
+
+  user.password = hashedPassword;
+  user.resetPasswordToken = undefined;
+  user.resetPasswordExpires = undefined;
+  await user.save();
+
+  res.json({
+    status: httpStatus.success,
+    message: "تم تغيير كلمة المرور بنجاح! يمكنك الآن تسجيل الدخول",
+  });
+});
+
+// ============================================================
+// تحديث module.exports - استبدل السطر الموجود بهذا
+// ============================================================
 module.exports = {
   getAllUsers,
   register,
@@ -525,4 +687,9 @@ module.exports = {
   deleteUser,
   addConversation,
   updatePreferences,
+  // ========== الدوال الجديدة ==========
+  verifyEmail,
+  resendVerification,
+  forgotPassword,
+  resetPassword,
 };

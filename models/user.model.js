@@ -61,6 +61,18 @@ const userSchema = new mongoose.Schema({
     default: null
   },
 
+  // ========== إضافات Email Verification ==========
+  isEmailVerified: {
+    type: Boolean,
+    default: false
+  },
+  emailVerificationToken: String,
+  emailVerificationExpires: Date,
+
+  // ========== إضافات Password Reset ==========
+  resetPasswordToken: String,
+  resetPasswordExpires: Date,
+
   conversations: [conversationSchema],
   preferences: preferencesSchema,
 

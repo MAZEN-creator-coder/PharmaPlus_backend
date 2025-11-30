@@ -3,7 +3,7 @@ const User = require("../models/user.model");
 const Pharmacy = require("../models/pharmacy.model");
 const Medicine = require("../models/medicine.model");
 const asyncWrapper = require("../middleware/asyncwrapper");
-const emailService = require("../utilities/email.service");
+const emailService = require("../services/email.service");
 const httpStatus = require("../utilities/httpstatustext");
 
 const createOrder = asyncWrapper(async (req, res) => {

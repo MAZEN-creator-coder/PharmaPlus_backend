@@ -1,8 +1,5 @@
 const nodemailer = require("nodemailer");
 
-// A minimal email service using Gmail SMTP + app password.
-// For production, consider OAuth2 or a transactional email provider.
-
 if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
   console.warn(
     "EMAIL_USER or EMAIL_PASS not set — email sending will fail until configured"
@@ -17,12 +14,10 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// debug logger: print only when DEBUG_EMAIL=true to avoid noisy logs (internal only)
 const debugLog = (...args) => {
   if (process.env.DEBUG_EMAIL === "true") console.log(...args);
 };
 
-// Minimal startup logging (errors always shown, success only if debug enabled)
 transporter.verify((err, success) => {
   if (err) {
     console.error(
@@ -47,7 +42,6 @@ const sendMail = async ({ to, subject, html }) => {
   debugLog(`email.service: sending email to ${to} subject=${subject}`);
   try {
     const info = await transporter.sendMail(mailOptions);
-    // success is silent in normal mode; if debug enabled, log it
     debugLog(`email.service: sent email to ${to}, messageId=${info.messageId}`);
     return info;
   } catch (err) {
@@ -55,7 +49,7 @@ const sendMail = async ({ to, subject, html }) => {
       `email.service: failed to send email to ${to}`,
       err && err.message ? err.message : err
     );
-    throw err; // re-throw so callers see the error if they handle it
+    throw err;
   }
 };
 
@@ -68,6 +62,69 @@ const isGmailAddress = (email) => {
   );
 };
 
+// ========== Email Verification Template ==========
+const buildEmailVerificationHTML = (user, verificationToken) => {
+  const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${verificationToken}`;
+  const logoUrl = process.env.EMAIL_LOGO_URL || "";
+  
+  return `
+  <div style="font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; color: #333; max-width: 700px; margin: auto; padding: 24px; background: #f9fafb;">
+    <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #e6e6e6;">
+      <div style="display:flex; align-items:center; gap:12px;">
+        ${logoUrl ? `<img src='${logoUrl}' alt='logo' style='width:72px; height:auto; object-fit:cover; border-radius:8px;'/>` : ""}
+        <h1 style="margin:0; color:#2f855a; font-size:20px;">مرحباً بك في PharmaPlus! 🎉</h1>
+      </div>
+      <p style="color:#666;">مرحباً ${user.firstname || user.fullName || ""},</p>
+      <p style="color:#444">شكراً لتسجيلك معنا. الرجاء تأكيد بريدك الإلكتروني بالضغط على الزر أدناه:</p>
+      
+      <div style="margin: 24px 0; text-align: center;">
+        <a href="${verificationUrl}" style="background:#2f855a; color:#fff; padding:12px 24px; border-radius:6px; text-decoration:none; display:inline-block; font-weight:bold;">
+          تأكيد البريد الإلكتروني ✓
+        </a>
+      </div>
+      
+      <p style="color:#777; font-size:13px">أو انسخ الرابط التالي في المتصفح:</p>
+      <p style="background:#f5f5f5; padding:10px; border-radius:4px; word-break:break-all; font-size:12px;">${verificationUrl}</p>
+      
+      <hr style="margin:18px 0; border-color:#eee;" />
+      <p style="color:#999; font-size:12px;">هذا الرابط صالح لمدة 24 ساعة فقط. إذا لم تقم بالتسجيل، يمكنك تجاهل هذا الإيميل.</p>
+    </div>
+  </div>
+  `;
+};
+
+// ========== Password Reset Template ==========
+const buildPasswordResetHTML = (user, resetToken) => {
+  const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+  const logoUrl = process.env.EMAIL_LOGO_URL || "";
+  
+  return `
+  <div style="font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; color: #333; max-width: 700px; margin: auto; padding: 24px; background: #f9fafb;">
+    <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #e6e6e6;">
+      <div style="display:flex; align-items:center; gap:12px;">
+        ${logoUrl ? `<img src='${logoUrl}' alt='logo' style='width:72px; height:auto; object-fit:cover; border-radius:8px;'/>` : ""}
+        <h1 style="margin:0; color:#2f855a; font-size:20px;">إعادة تعيين كلمة المرور 🔐</h1>
+      </div>
+      <p style="color:#666;">مرحباً ${user.firstname || user.fullName || ""},</p>
+      <p style="color:#444">تلقينا طلباً لإعادة تعيين كلمة المرور الخاصة بحسابك.</p>
+      
+      <div style="margin: 24px 0; text-align: center;">
+        <a href="${resetUrl}" style="background:#2196F3; color:#fff; padding:12px 24px; border-radius:6px; text-decoration:none; display:inline-block; font-weight:bold;">
+          إعادة تعيين كلمة المرور 🔑
+        </a>
+      </div>
+      
+      <p style="color:#777; font-size:13px">أو انسخ الرابط التالي في المتصفح:</p>
+      <p style="background:#f5f5f5; padding:10px; border-radius:4px; word-break:break-all; font-size:12px;">${resetUrl}</p>
+      
+      <hr style="margin:18px 0; border-color:#eee;" />
+      <p style="color:#999; font-size:12px;">هذا الرابط صالح لمدة ساعة واحدة فقط. إذا لم تطلب إعادة تعيين كلمة المرور، يمكنك تجاهل هذا الإيميل بأمان.</p>
+    </div>
+  </div>
+  `;
+};
+
+// ========== Order Templates (الموجودة بالفعل) ==========
 const buildOrderPlacedHTML = (order, user, pharmacy) => {
   const itemsHtml = (order.items || [])
     .map(
@@ -187,6 +244,21 @@ const buildOrderDeliveredHTML = (order, user, pharmacy) => {
   `;
 };
 
+// ========== Send Functions ==========
+const sendVerificationEmail = async (user, verificationToken) => {
+  if (!user?.email) throw new Error("User email is required");
+  const html = buildEmailVerificationHTML(user, verificationToken);
+  const subject = "تأكيد البريد الإلكتروني - PharmaPlus";
+  return sendMail({ to: user.email, subject, html });
+};
+
+const sendPasswordResetEmail = async (user, resetToken) => {
+  if (!user?.email) throw new Error("User email is required");
+  const html = buildPasswordResetHTML(user, resetToken);
+  const subject = "إعادة تعيين كلمة المرور - PharmaPlus";
+  return sendMail({ to: user.email, subject, html });
+};
+
 const sendOrderPlacedEmail = async (order, user, pharmacy) => {
   if (!user?.email) throw new Error("User email is required");
   const html = buildOrderPlacedHTML(order, user, pharmacy);
@@ -205,6 +277,8 @@ module.exports = {
   sendMail,
   sendOrderPlacedEmail,
   sendOrderDeliveredEmail,
+  sendVerificationEmail,
+  sendPasswordResetEmail,
   isGmailAddress,
   verifyTransporter: () =>
     new Promise((resolve, reject) => {
@@ -213,5 +287,4 @@ module.exports = {
         resolve(success);
       });
     }),
-  // do not export debugLog by default (internal only)
 };
