@@ -152,7 +152,8 @@ const getMedicinesByPharmacy = asyncWrapper(async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
   const medicines = await Medicine.find({ pharmacy: pharmacyId }).skip(skip).limit(limit);
-  res.json({ status: httpStatus.success, data: { medicines } });
+ const total = await Medicine.countDocuments({ pharmacy: pharmacyId });
+  res.json({ status: httpStatus.success, data: { medicines, pagination: { total, page, limit, totalPages: Math.ceil(total / limit) } } });
 });
 
 const getMedicinesByName = asyncWrapper(async (req, res) => {
