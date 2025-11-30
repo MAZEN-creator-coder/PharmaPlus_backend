@@ -6,7 +6,10 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const userRoles = require("../utilities/userRoles");
 const locationService = require("../services/location.service");
+const crypto = require("crypto");
+const emailService = require("../services/email.service");
 
+// Function to create an associated pharmacy for a newly registered admin user
 const createPharmacyForAdmin = async (user) => {
   try {
     let pharmacyData = {
@@ -22,14 +25,16 @@ const createPharmacyForAdmin = async (user) => {
       pharmacyData.address = user.address;
     }
 
+    // Attempt to use Geolocation data if provided
     if (user.position && user.position.lat && user.position.lng) {
       pharmacyData.position = user.position;
       console.log(
-        `✅ تم استخدام Geolocation من User: lat=${user.position.lat}, lng=${user.position.lng}`
+        `✅ Geolocation used from User: lat=${user.position.lat}, lng=${user.position.lng}`
       );
     } else if (user.address) {
+      // If no Geolocation, calculate position from address
       console.log(
-        `📍 جاري حساب موقع الصيدلية من عنوان المستخدم: ${user.address}`
+        `📍 Calculating pharmacy location from user address: ${user.address}`
       );
 
       const position = await locationService.getPositionForAddress(
@@ -39,13 +44,13 @@ const createPharmacyForAdmin = async (user) => {
       if (position) {
         pharmacyData.position = position;
         console.log(
-          `✅ تم حساب الموقع من العنوان: lat=${position.lat}, lng=${position.lng}`
+          `✅ Location calculated from address: lat=${position.lat}, lng=${position.lng}`
         );
       } else {
-        console.log(`⚠️ لم يتم حساب الموقع من العنوان`);
+        console.log(`⚠️ Failed to calculate location from address`);
       }
     } else {
-      console.log(`⚠️ لا توجد بيانات موقع (بدون Geolocation وبدون عنوان)`);
+      console.log(`⚠️ No location data available (no Geolocation or address)`);
     }
 
     const pharmacy = await Pharmacy.create(pharmacyData);
@@ -54,7 +59,7 @@ const createPharmacyForAdmin = async (user) => {
     await user.save();
 
     console.log(
-      `✅ تم إنشاء صيدلية للـ Admin: ${user.email} مع الترخيص: ${user.license}`
+      `✅ Pharmacy created for Admin: ${user.email} with license: ${user.license}`
     );
     return pharmacy;
   } catch (error) {
@@ -63,7 +68,7 @@ const createPharmacyForAdmin = async (user) => {
   }
 };
 
-// ubdate common data in case of user is admin and has pharmacy
+// Update common data in case the user is an admin and manages a pharmacy (synchronization)
 const updateCommonData = async (source, type) => {
   let user, pharmacy;
 
@@ -71,13 +76,13 @@ const updateCommonData = async (source, type) => {
   if (type === "user") {
     user = source;
 
-    // لازم يكون Admin وصاحب صيدلية
+    // Must be Admin and have a pharmacy
     if (user.role !== "admin" || !user.pharmacyId) return;
 
     pharmacy = await Pharmacy.findById(user.pharmacyId);
     if (!pharmacy) return;
 
-    // المزامنة
+    // Synchronization
     if (user.phone !== undefined) pharmacy.contact = user.phone;
     if (user.address !== undefined) pharmacy.address = user.address;
     if (user.position !== undefined) pharmacy.position = user.position;
@@ -155,11 +160,14 @@ const register = asyncWrapper(async (req, res, next) => {
     return next(error);
   }
 
-  // Hash password
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(password, salt);
 
   const filename = req.file?.filename || "avatar.webp";
+
+  // ========== Create Verification Token ==========
+  const verificationToken = crypto.randomBytes(32).toString("hex");
+  const verificationExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
 
   const newUser = new Users({
     firstname,
@@ -179,6 +187,10 @@ const register = asyncWrapper(async (req, res, next) => {
       smsAlerts: false,
     },
     conversations: [],
+    // ========== Verification fields ==========
+    isEmailVerified: false,
+    emailVerificationToken: verificationToken,
+    emailVerificationExpires: verificationExpires,
   });
 
   if (latitude && longitude) {
@@ -186,45 +198,36 @@ const register = asyncWrapper(async (req, res, next) => {
       lat: parseFloat(latitude),
       lng: parseFloat(longitude),
     };
-    console.log(`✅ تم حفظ Geolocation: lat=${latitude}, lng=${longitude}`);
-  } else {
-    console.log(`⚠️ لم يتم إرسال Geolocation من Frontend`);
+    console.log(`✅ Geolocation saved: lat=${latitude}, lng=${longitude}`);
   }
 
   if (newUser.role === userRoles.ADMIN) {
     await createPharmacyForAdmin(newUser);
   }
 
-  // Generate JWT token
-  const userToken = jwt.sign(
-    {
-      id: newUser._id,
-      email: newUser.email,
-      role: newUser.role,
-      image: newUser.avatar,
-      pharmacyId: newUser.pharmacyId || null,
-    },
-    process.env.JWT_SECRET_KEY,
-    { expiresIn: "24h" }
-  );
-
-  newUser.token = userToken;
   await newUser.save();
 
+  // ========== Send Email Verification ==========
+  try {
+    await emailService.sendVerificationEmail(newUser, verificationToken);
+    console.log(`✅ Confirmation email sent to: ${newUser.email}`);
+  } catch (emailError) {
+    console.error("Error sending confirmation email:", emailError);
+    // Continue even if email fails
+  }
+
+  // Note: We don't send a token here - the user must verify their email first
   res.status(201).json({
     status: httpStatus.success,
+    message:
+      "Registration successful. Please check your email to confirm your account",
     data: {
-      token: userToken,
       user: {
         _id: newUser._id,
         firstname: newUser.firstname,
         lastname: newUser.lastname,
         email: newUser.email,
         role: newUser.role,
-        address: newUser.address,
-        position: newUser.position,
-        license: newUser.license || null,
-        pharmacyId: newUser.pharmacyId || null,
       },
     },
   });
@@ -246,6 +249,13 @@ const login = asyncWrapper(async (req, res, next) => {
     return next(error);
   }
 
+  // ========== Check email verification ==========
+  if (!existingUser.isEmailVerified) {
+    const error = new Error("Please confirm your email address first");
+    error.statusCode = 403;
+    return next(error);
+  }
+
   const isPasswordMatch = await bcrypt.compare(password, existingUser.password);
   if (!isPasswordMatch) {
     const error = new Error("Invalid password");
@@ -262,7 +272,7 @@ const login = asyncWrapper(async (req, res, next) => {
       pharmacyId: existingUser.pharmacyId || null,
     },
     process.env.JWT_SECRET_KEY,
-    { expiresIn: "1h" }
+    { expiresIn: "24h" }
   );
 
   existingUser.token = userToken;
@@ -350,93 +360,89 @@ const updateProfile = asyncWrapper(async (req, res, next) => {
 
   res.json({ status: httpStatus.success, data: { user: updatedUser } });
 });
+
 const updateUser = asyncWrapper(async (req, res, next) => {
-const { id } = req.params;
-const updateData = { ...req.body };
+  const { id } = req.params;
+  const updateData = { ...req.body };
 
-if (req.file) {
-updateData.avatar = `uploads/${req.file.filename}`;
-}
-
-if (updateData.firstname || updateData.lastname) {
-updateData.fullName = `${updateData.firstname || ""} ${
-      updateData.lastname || ""
-    }`.trim();
-}
-
-const user = await Users.findById(id);
-if (!user) {
-const error = new Error("User not found");
-error.statusCode = 404;
-return next(error);
-}
-
-// -----------------------
-// Check email uniqueness
-// -----------------------
-if (updateData.email && updateData.email !== user.email) {
-const existingUser = await Users.findOne({ email: updateData.email });
-if (existingUser) {
-const error = new Error("Email is already in use");
-error.statusCode = 400;
-return next(error);
-}
-}
-
-if (updateData.role === userRoles.ADMIN && user.role !== userRoles.ADMIN) {
-if (!user.license) {
-const error = new Error("User must have a license to become an admin");
-error.statusCode = 400;
-return next(error);
-}
-
-
-const existingPharmacy = await Pharmacy.findOne({ managerId: id });
-
-if (existingPharmacy) {
-  user.set(updateData);
-  user.pharmacyId = existingPharmacy._id;
-
-  if (updateData.license) {
-    await Pharmacy.findByIdAndUpdate(existingPharmacy._id, {
-      license: updateData.license,
-    });
+  if (req.file) {
+    updateData.avatar = `uploads/${req.file.filename}`;
   }
 
-  console.log(
-    `✅ تم ربط الـ User ${id} بـ الصيدلية الموجودة: ${existingPharmacy._id}`
-  );
-} else {
-  user.set(updateData);
-  await createPharmacyForAdmin(user);
-  console.log(`✅ تم إنشاء صيدلية جديدة للـ User ${id}`);
-}
+  if (updateData.firstname || updateData.lastname) {
+    updateData.fullName = `${updateData.firstname || ""} ${
+      updateData.lastname || ""
+    }`.trim();
+  }
 
+  const user = await Users.findById(id);
+  if (!user) {
+    const error = new Error("User not found");
+    error.statusCode = 404;
+    return next(error);
+  }
 
-} else if (updateData.role === userRoles.ADMIN && updateData.license) {
-Object.assign(user, updateData);
+  // -----------------------
+  // Check email uniqueness
+  // -----------------------
+  if (updateData.email && updateData.email !== user.email) {
+    const existingUser = await Users.findOne({ email: updateData.email });
+    if (existingUser) {
+      const error = new Error("Email is already in use");
+      error.statusCode = 400;
+      return next(error);
+    }
+  }
 
-if (user.pharmacyId) {
-  await Pharmacy.findByIdAndUpdate(user.pharmacyId, {
-    license: updateData.license,
-  });
-}
+  if (updateData.role === userRoles.ADMIN && user.role !== userRoles.ADMIN) {
+    if (!user.license) {
+      const error = new Error("User must have a license to become an admin");
+      error.statusCode = 400;
+      return next(error);
+    }
 
-await user.save();
+    const existingPharmacy = await Pharmacy.findOne({ managerId: id });
 
+    if (existingPharmacy) {
+      user.set(updateData);
+      user.pharmacyId = existingPharmacy._id;
 
-} else {
-if (updateData.license) {
-delete updateData.license;
-}
-Object.assign(user, updateData);
-await user.save();
-await updateCommonData(user, "user");
-}
+      if (updateData.license) {
+        await Pharmacy.findByIdAndUpdate(existingPharmacy._id, {
+          license: updateData.license,
+        });
+      }
 
-const updatedUser = await Users.findById(id, { __v: 0, password: 0 });
+      console.log(
+        `✅ User ${id} linked to existing Pharmacy: ${existingPharmacy._id}`
+      );
+    } else {
+      user.set(updateData);
+      await createPharmacyForAdmin(user);
+      console.log(`✅ New pharmacy created for User ${id}`);
+    }
+  } else if (updateData.role === userRoles.ADMIN && updateData.license) {
+    Object.assign(user, updateData);
 
-res.json({ status: httpStatus.success, data: { user: updatedUser } });
+    if (user.pharmacyId) {
+      await Pharmacy.findByIdAndUpdate(user.pharmacyId, {
+        license: updateData.license,
+      });
+    }
+
+    await user.save();
+  } else {
+    if (updateData.license) {
+      delete updateData.license;
+    }
+    Object.assign(user, updateData);
+    await user.save();
+    await updateCommonData(user, "user");
+  }
+
+  const updatedUser = await Users.findById(id, { __v: 0, password: 0 });
+
+  res.json({ status: httpStatus.success, data: { user: updatedUser } });
 });
 
 const addConversation = asyncWrapper(async (req, res, next) => {
@@ -481,7 +487,7 @@ const updatePreferences = asyncWrapper(async (req, res, next) => {
 
 const deleteUser = asyncWrapper(async (req, res, next) => {
   const { id } = req.params;
-  //delete assotiated farmacy if admin
+  //delete associated pharmacy if admin
   const userToDelete = await Users.findById(id);
   if (
     userToDelete &&
@@ -514,6 +520,178 @@ const deleteUser = asyncWrapper(async (req, res, next) => {
   });
 });
 
+const verifyEmail = asyncWrapper(async (req, res, next) => {
+  const { token } = req.params;
+
+  const user = await Users.findOne({
+    emailVerificationToken: token,
+    emailVerificationExpires: { $gt: Date.now() },
+  });
+
+  if (!user) {
+    const error = new Error("Verification link is invalid or expired");
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  user.isEmailVerified = true;
+  user.emailVerificationToken = undefined;
+  user.emailVerificationExpires = undefined;
+  await user.save();
+
+  // Create a login token now that the email has been verified so the user can be logged in immediately.
+  const userToken = jwt.sign(
+    {
+      id: user._id,
+      email: user.email,
+      role: user.role,
+      image: user.avatar,
+      pharmacyId: user.pharmacyId || null,
+    },
+    process.env.JWT_SECRET_KEY,
+    { expiresIn: "24h" }
+  );
+
+  user.token = userToken;
+  await user.save();
+
+  res.json({
+    status: httpStatus.success,
+    message: "Email confirmed successfully! You can now log in",
+    data: { token: userToken },
+  });
+});
+
+// Resend verification link
+const resendVerification = asyncWrapper(async (req, res, next) => {
+  const { email } = req.body;
+
+  if (!email) {
+    const error = new Error("Email is required");
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  const user = await Users.findOne({ email });
+  if (!user) {
+    const error = new Error("No user found with this email address");
+    error.statusCode = 404;
+    return next(error);
+  }
+
+  if (user.isEmailVerified) {
+    const error = new Error("Email is already verified");
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  // Create new token
+  const verificationToken = crypto.randomBytes(32).toString("hex");
+  const verificationExpires = Date.now() + 24 * 60 * 60 * 1000;
+
+  user.emailVerificationToken = verificationToken;
+  user.emailVerificationExpires = verificationExpires;
+  await user.save();
+
+  // Send email
+  try {
+    await emailService.sendVerificationEmail(user, verificationToken);
+    console.log(`✅ Confirmation email resent to: ${user.email}`);
+  } catch (emailError) {
+    console.error("Error sending email:", emailError);
+    const error = new Error("Failed to send email");
+    error.statusCode = 500;
+    return next(error);
+  }
+
+  res.json({
+    status: httpStatus.success,
+    message: "Confirmation link has been resent to your email address",
+  });
+});
+
+// Request password reset
+const forgotPassword = asyncWrapper(async (req, res, next) => {
+  const { email } = req.body;
+
+  if (!email) {
+    const error = new Error("Email is required");
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  const user = await Users.findOne({ email });
+  if (!user) {
+    const error = new Error("No user found with this email address");
+    error.statusCode = 404;
+    return next(error);
+  }
+
+  // Create reset token
+  const resetToken = crypto.randomBytes(32).toString("hex");
+  const resetExpires = Date.now() + 1 * 60 * 60 * 1000; // 1 hour
+
+  user.resetPasswordToken = resetToken;
+  user.resetPasswordExpires = resetExpires;
+  await user.save();
+
+  // Send email
+  try {
+    await emailService.sendPasswordResetEmail(user, resetToken);
+    console.log(`✅ Reset email sent to: ${user.email}`);
+  } catch (emailError) {
+    console.error("Error sending email:", emailError);
+    const error = new Error("Failed to send email");
+    error.statusCode = 500;
+    return next(error);
+  }
+
+  res.json({
+    status: httpStatus.success,
+    message: "Password reset link has been sent to your email address",
+  });
+});
+
+// Reset password
+const resetPassword = asyncWrapper(async (req, res, next) => {
+  const { token } = req.params;
+  const { password } = req.body;
+
+  if (!password) {
+    const error = new Error("New password is required");
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  const user = await Users.findOne({
+    resetPasswordToken: token,
+    resetPasswordExpires: { $gt: Date.now() },
+  });
+
+  if (!user) {
+    const error = new Error("Reset link is invalid or expired");
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  // Hash the new password
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(password, salt);
+
+  user.password = hashedPassword;
+  user.resetPasswordToken = undefined;
+  user.resetPasswordExpires = undefined;
+  await user.save();
+
+  res.json({
+    status: httpStatus.success,
+    message: "Password changed successfully! You can now log in",
+  });
+});
+
+// ============================================================
+// Update module.exports - replace existing line with this
+// ============================================================
 module.exports = {
   getAllUsers,
   register,
@@ -525,4 +703,9 @@ module.exports = {
   deleteUser,
   addConversation,
   updatePreferences,
+  // ========== New functions ==========
+  verifyEmail,
+  resendVerification,
+  forgotPassword,
+  resetPassword,
 };

@@ -30,9 +30,20 @@ const upload = multer({
 
 const router = express.Router();
 
-router.get("/", verifyToken, controller.getAllUsers);
+// ========== Auth Routes ==========
 router.post("/register", upload.single("avatar"), controller.register);
 router.post("/login", controller.login);
+
+// ========== Email Verification Routes (جديدة) ==========
+router.get("/verify-email/:token", controller.verifyEmail);
+router.post("/resend-verification", controller.resendVerification);
+
+// ========== Password Reset Routes (جديدة) ==========
+router.post("/forgot-password", controller.forgotPassword);
+router.post("/reset-password/:token", controller.resetPassword);
+
+// ========== User Routes ==========
+router.get("/", verifyToken, controller.getAllUsers);
 router.get('/profile', verifyToken, controller.getProfile);
 router.put('/profile', verifyToken, upload.single("avatar"), controller.updateProfile);
 router.get("/:id", verifyToken, controller.getUserById);
