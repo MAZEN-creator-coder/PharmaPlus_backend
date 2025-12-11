@@ -14,13 +14,22 @@ const getAllMedicines = asyncWrapper(async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
 
-  const medicines = await Medicine.find().skip(skip).limit(limit);
+  const medicines = await Medicine.find().skip(skip).limit(limit).populate("pharmacy", "_id");
   const total = await Medicine.countDocuments();
+  
+  // Ensure pharmacyId is explicitly set for each medicine
+  const medicinesWithPharmacyId = medicines.map(med => {
+    const obj = med.toObject();
+    if (med.pharmacy && med.pharmacy._id) {
+      obj.pharmacyId = med.pharmacy._id;
+    }
+    return obj;
+  });
 
   res.json({
     status: httpStatus.success,
     data: {
-      medicines,
+      medicines: medicinesWithPharmacyId,
       pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
     },
   });
@@ -152,8 +161,22 @@ const getMedicinesByPharmacy = asyncWrapper(async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
   const medicines = await Medicine.find({ pharmacy: pharmacyId }).skip(skip).limit(limit);
- const total = await Medicine.countDocuments({ pharmacy: pharmacyId });
-  res.json({ status: httpStatus.success, data: { medicines, pagination: { total, page, limit, totalPages: Math.ceil(total / limit) } } });
+  const total = await Medicine.countDocuments({ pharmacy: pharmacyId });
+  
+  // Add pharmacyId to each medicine for frontend clarity
+  const medicinesWithPharmacyId = medicines.map(med => {
+    const obj = med.toObject();
+    obj.pharmacyId = pharmacyId;
+    return obj;
+  });
+  
+  res.json({ 
+    status: httpStatus.success, 
+    data: { 
+      medicines: medicinesWithPharmacyId, 
+      pagination: { total, page, limit, totalPages: Math.ceil(total / limit) } 
+    } 
+  });
 });
 
 const getMedicinesByName = asyncWrapper(async (req, res) => {
@@ -169,7 +192,7 @@ const getMedicinesByName = asyncWrapper(async (req, res) => {
   }
 
   const regex = new RegExp(name, "i");
-  const medicines = await Medicine.find({ name: regex }).populate("pharmacy");
+  const medicines = await Medicine.find({ name: regex }).populate("pharmacy", "name position status");
 
   const activeMedicines = medicines.filter(med => med.pharmacy && med.pharmacy.status === "active");
 
@@ -184,12 +207,25 @@ const getMedicinesByName = asyncWrapper(async (req, res) => {
           med.pharmacy.position.lat,
           med.pharmacy.position.lng
         );
-        return { ...med.toObject(), distance: parseFloat(distance.toFixed(2)) };
+        const medicineObj = med.toObject();
+        return { 
+          ...medicineObj, 
+          distance: parseFloat(distance.toFixed(2)),
+          pharmacyId: med.pharmacy._id, // Explicitly include pharmacyId for frontend
+          pharmacyName: med.pharmacy.name // Include pharmacy name for frontend display
+        };
       })
       .filter(med => med && med.distance <= 100000)
       .sort((a, b) => a.distance - b.distance);
   } else {
-    filteredMedicines = activeMedicines.map(med => med.toObject());
+    filteredMedicines = activeMedicines.map(med => {
+      const medicineObj = med.toObject();
+      return {
+        ...medicineObj,
+        pharmacyId: med.pharmacy._id, // Explicitly include pharmacyId for frontend
+        pharmacyName: med.pharmacy.name // Include pharmacy name for frontend display
+      };
+    });
   }
 
   const total = filteredMedicines.length;
