@@ -17,7 +17,9 @@ const pharmacyRoutes = require("./routs/pharmacies.rout");
 const dashboardRoutes = require("./routs/analytics_suepr.rout");
 const prescriptionRoutes = require("./routs/prescription.rout");
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL
+}));
 
 app.use(express.json());
 
